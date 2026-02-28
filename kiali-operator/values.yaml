@@ -22,10 +22,26 @@ resources:
   limits:
     cpu: "500m"
     memory: "512Mi"
-affinity: {}
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: kiali-operator
+          topologyKey: kubernetes.io/hostname
 replicaCount: 3
 priorityClassName: ""
-securityContext: {}
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
 
 # Topology spread constraints to ensure pods are distributed across nodes/zones.
 # This is critical for high availability in production.
@@ -157,3 +173,14 @@ cr:
         limits:
           cpu: "500m"
           memory: "1Gi"
+      pod_labels:
+        app: kiali
+      affinity:
+        pod_anti_affinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: kiali
+                topologyKey: kubernetes.io/hostname

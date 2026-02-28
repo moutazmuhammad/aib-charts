@@ -283,13 +283,13 @@ persistence:
 # key in secret is given via (default to HARBOR_ADMIN_PASSWORD)
 existingSecretAdminPassword: ""
 existingSecretAdminPasswordKey: HARBOR_ADMIN_PASSWORD
-harborAdminPassword: "Harbor12345"
+harborAdminPassword: "CHANGE_ME_BEFORE_DEPLOY"
 
 # The internal TLS used for harbor components secure communicating. In order to enable https
 # in each component tls cert files need to provided in advance.
 internalTLS:
   # If internal TLS enabled
-  enabled: false
+  enabled: true
   # enable strong ssl ciphers (default: false)
   strong_ssl_ciphers: false
   # There are three ways to provide tls
@@ -374,7 +374,7 @@ logLevel: info
 caSecretName: ""
 
 # The secret key used for encryption. Must be a string of 16 chars.
-secretKey: "not-a-secure-key"
+secretKey: "CHANGE_ME_16CHARS"
 # If using existingSecretSecretKey, the key must be secretKey
 existingSecretSecretKey: ""
 
@@ -404,7 +404,7 @@ enableMigrateHelmHook: false
 # uaaSecretName:
 
 metrics:
-  enabled: false
+  enabled: true
   core:
     path: /metrics
     port: 8001
@@ -477,8 +477,8 @@ trace:
 # `project/project_metadata/repository/artifact/manifest` in the redis
 # which help to improve the performance of high concurrent pulling manifest.
 cache:
-  # default is not enabled.
-  enabled: false
+  # Enable caching for improved performance on high-concurrency pulls.
+  enabled: true
   # default keep cache for one day.
   expireHours: 24
 
@@ -552,7 +552,13 @@ portal:
   tolerations: []
   affinity: {}
   # Spread Pods across failure-domains like regions, availability zones or nodes
-  topologySpreadConstraints: []
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          component: portal
   # - maxSkew: 1
   #   topologyKey: topology.kubernetes.io/zone
   #   nodeTaintsPolicy: Honor
@@ -599,7 +605,13 @@ core:
   tolerations: []
   affinity: {}
   # Spread Pods across failure-domains like regions, availability zones or nodes
-  topologySpreadConstraints: []
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          component: core
   # - maxSkew: 1
   #   topologyKey: topology.kubernetes.io/zone
   #   nodeTaintsPolicy: Honor
@@ -765,11 +777,13 @@ registry:
   tolerations: []
   affinity: {}
   # Spread Pods across failure-domains like regions, availability zones or nodes
-  topologySpreadConstraints: []
-  # - maxSkew: 1
-  #   topologyKey: topology.kubernetes.io/zone
-  #   nodeTaintsPolicy: Honor
-  #   whenUnsatisfiable: DoNotSchedule
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          component: registry
   ## Additional deployment annotations
   podAnnotations: {}
   ## Additional deployment labels
@@ -849,11 +863,13 @@ trivy:
   tolerations: []
   affinity: {}
   # Spread Pods across failure-domains like regions, availability zones or nodes
-  topologySpreadConstraints: []
-  # - maxSkew: 1
-  #   topologyKey: topology.kubernetes.io/zone
-  #   nodeTaintsPolicy: Honor
-  #   whenUnsatisfiable: DoNotSchedule
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          component: trivy
   ## Additional deployment annotations
   podAnnotations: {}
   ## Additional deployment labels
@@ -966,7 +982,7 @@ database:
     #   image: busybox
     #   command: [ 'sh', '-c', "sleep 20" ]
     # The initial superuser password for internal database
-    password: "changeit"
+    password: "CHANGE_ME_BEFORE_DEPLOY"
     # The size limit for Shared memory, pgSQL use it for shared_buffer
     # More details see:
     # https://github.com/goharbor/harbor/issues/15034
@@ -1111,12 +1127,14 @@ exporter:
   tolerations: []
   affinity: {}
   # Spread Pods across failure-domains like regions, availability zones or nodes
-  topologySpreadConstraints: []
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          component: exporter
   ## The priority class to run the pod as
   priorityClassName:
-  # - maxSkew: 1
-  #   topologyKey: topology.kubernetes.io/zone
-  #   nodeTaintsPolicy: Honor
-  #   whenUnsatisfiable: DoNotSchedule
   cacheDuration: 23
   cacheCleanInterval: 14400
