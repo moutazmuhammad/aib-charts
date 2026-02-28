@@ -1,0 +1,130 @@
+# Istio Config - Prod environment
+
+gateway:
+  name: platform-gateway
+  namespace: service-mesh
+  servers:
+    - name: https
+      port: 443
+      protocol: HTTPS
+      tls:
+        mode: SIMPLE
+        credentialName: platform-tls-cert
+      hosts:
+        - "*.example.com"
+    - name: http-redirect
+      port: 80
+      protocol: HTTP
+      tls:
+        httpsRedirect: true
+      hosts:
+        - "*.example.com"
+
+tls:
+  enabled: true
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  secretName: platform-tls-cert
+  hosts:
+    - "*.example.com"
+
+virtualServices:
+  harbor:
+    enabled: true
+    host: harbor.example.com
+    gateway: platform-gateway
+    destination:
+      host: harbor-core.harbor.svc.cluster.local
+      port: 80
+    retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: gateway-error,connect-failure,refused-stream
+  nexus:
+    enabled: true
+    host: nexus.example.com
+    gateway: platform-gateway
+    destination:
+      host: nexus-nexus-repository-manager.nexus.svc.cluster.local
+      port: 8081
+    retries:
+      attempts: 3
+      perTryTimeout: 5s
+      retryOn: gateway-error,connect-failure,refused-stream
+  argocd:
+    enabled: true
+    host: argocd.example.com
+    gateway: platform-gateway
+    destination:
+      host: argocd-server.argocd.svc.cluster.local
+      port: 443
+  kiali:
+    enabled: true
+    host: kiali.example.com
+    gateway: platform-gateway
+    destination:
+      host: kiali.kiali.svc.cluster.local
+      port: 20001
+  oauth2proxy:
+    enabled: true
+    host: auth.example.com
+    gateway: platform-gateway
+    destination:
+      host: oauth2-proxy.oauth2-proxy.svc.cluster.local
+      port: 80
+
+destinationRules:
+  harbor:
+    enabled: true
+    host: harbor-core.harbor.svc.cluster.local
+    trafficPolicy:
+      connectionPool:
+        tcp:
+          maxConnections: 500
+        http:
+          h2UpgradePolicy: DEFAULT
+          http1MaxPendingRequests: 500
+          http2MaxRequests: 5000
+      tls:
+        mode: ISTIO_MUTUAL
+      outlierDetection:
+        consecutive5xxErrors: 5
+        interval: 30s
+        baseEjectionTime: 30s
+        maxEjectionPercent: 50
+  nexus:
+    enabled: true
+    host: nexus-nexus-repository-manager.nexus.svc.cluster.local
+    trafficPolicy:
+      connectionPool:
+        tcp:
+          maxConnections: 500
+        http:
+          h2UpgradePolicy: DEFAULT
+          http1MaxPendingRequests: 500
+          http2MaxRequests: 5000
+      tls:
+        mode: ISTIO_MUTUAL
+      outlierDetection:
+        consecutive5xxErrors: 5
+        interval: 30s
+        baseEjectionTime: 30s
+        maxEjectionPercent: 50
+  argocd:
+    enabled: true
+    host: argocd-server.argocd.svc.cluster.local
+    trafficPolicy:
+      tls:
+        mode: DISABLE
+  kiali:
+    enabled: true
+    host: kiali.kiali.svc.cluster.local
+    trafficPolicy:
+      tls:
+        mode: ISTIO_MUTUAL
+      outlierDetection:
+        consecutive5xxErrors: 5
+        interval: 30s
+        baseEjectionTime: 30s
+        maxEjectionPercent: 50

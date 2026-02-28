@@ -1,0 +1,96 @@
+# ArgoCD - Prod environment
+# Production-grade: 3+ replicas, HA, strict resources
+
+global:
+  domain: argocd.example.com
+  logging:
+    format: json
+    level: warn
+
+configs:
+  cm:
+    url: https://argocd.example.com
+    # Disable admin account in production; use SSO
+    admin.enabled: "false"
+  params:
+    server.insecure: true
+
+controller:
+  replicas: 3
+  resources:
+    requests:
+      cpu: 1
+      memory: 1Gi
+    limits:
+      cpu: 4
+      memory: 4Gi
+
+server:
+  replicas: 3
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: 2
+      memory: 2Gi
+  ingress:
+    enabled: true
+    ingressClassName: ""
+    hostname: argocd.example.com
+    tls: true
+    annotations:
+      ingress.kubernetes.io/ssl-redirect: "true"
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: DoNotSchedule
+
+repoServer:
+  replicas: 3
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: 2
+      memory: 2Gi
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: DoNotSchedule
+
+applicationSet:
+  replicas: 3
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 1
+      memory: 1Gi
+
+notifications:
+  enabled: true
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 1
+      memory: 1Gi
+
+redis:
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 1
+      memory: 1Gi
+
+# Enable HA Redis for production
+redis-ha:
+  enabled: true
+  haproxy:
+    enabled: true

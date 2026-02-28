@@ -1,0 +1,37 @@
+{{- range $name, $vs := .Values.virtualServices }}
+{{- if $vs.enabled }}
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: {{ $name }}
+  namespace: {{ $.Values.gateway.namespace }}
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/part-of: service-mesh
+    app.kubernetes.io/component: {{ $name }}
+spec:
+  hosts:
+    - {{ $vs.host | quote }}
+  gateways:
+    - {{ $vs.gateway }}
+  http:
+    - match:
+        - uri:
+            prefix: /
+      route:
+        - destination:
+            host: {{ $vs.destination.host }}
+            port:
+              number: {{ $vs.destination.port }}
+      {{- if $vs.timeout }}
+      timeout: {{ $vs.timeout }}
+      {{- end }}
+      {{- if $vs.retries }}
+      retries:
+        attempts: {{ $vs.retries.attempts | default 3 }}
+        perTryTimeout: {{ $vs.retries.perTryTimeout | default "2s" }}
+        retryOn: {{ $vs.retries.retryOn | default "gateway-error,connect-failure,refused-stream" }}
+      {{- end }}
+{{- end }}
+{{- end }}

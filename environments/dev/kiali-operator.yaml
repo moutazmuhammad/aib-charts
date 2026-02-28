@@ -1,0 +1,40 @@
+# Kiali Operator - Dev environment
+
+replicaCount: 1
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
+
+debug:
+  enabled: true
+  verbosity: "1"
+
+cr:
+  create: true
+  name: kiali
+  namespace: kiali
+  spec:
+    deployment:
+      cluster_wide_access: true
+      replicas: 1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi
+    auth:
+      strategy: anonymous
+    external_services:
+      istio:
+        root_namespace: service-mesh
+      prometheus:
+        url: "http://prometheus.monitoring.svc.cluster.local:9090"
+      grafana:
+        url: ""

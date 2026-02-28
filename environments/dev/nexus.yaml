@@ -1,0 +1,47 @@
+# Nexus Repository Manager - Dev environment
+
+image:
+  repository: sonatype/nexus3
+  tag: 3.64.0
+  pullPolicy: IfNotPresent
+
+deploymentStrategy: Recreate
+
+nexus:
+  env:
+    - name: INSTALL4J_ADD_VM_PARAMS
+      value: |-
+        -Xms1200M -Xmx1200M
+        -XX:MaxDirectMemorySize=2G
+        -XX:+UnlockExperimentalVMOptions
+        -Djava.util.prefs.userRoot=/nexus-data/javaprefs
+    - name: NEXUS_SECURITY_RANDOMPASSWORD
+      value: "true"
+  resources:
+    requests:
+      cpu: 500m
+      memory: 2Gi
+    limits:
+      cpu: 2
+      memory: 4Gi
+
+persistence:
+  enabled: true
+  accessMode: ReadWriteOnce
+  storageSize: 30Gi
+
+ingress:
+  enabled: true
+  ingressClassName: ""
+  annotations:
+    ingress.kubernetes.io/proxy-body-size: "0"
+  hostPath: /
+  hostRepo: nexus.dev.example.com
+  tls:
+    - secretName: nexus-tls
+      hosts:
+        - nexus.dev.example.com
+
+service:
+  enabled: true
+  type: ClusterIP
