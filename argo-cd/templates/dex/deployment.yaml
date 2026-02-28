@@ -20,7 +20,7 @@ spec:
   strategy:
     {{- trim . | nindent 4 }}
   {{- end }}
-  replicas: 1
+  replicas: {{ .Values.dex.replicas | default 1 }}
   revisionHistoryLimit: {{ .Values.global.revisionHistoryLimit }}
   selector:
     matchLabels:
