@@ -131,7 +131,7 @@ global:
   # Default affinity preset for all components
   affinity:
     # -- Default pod anti-affinity rules. Either: `none`, `soft` or `hard`
-    podAntiAffinity: soft
+    podAntiAffinity: hard
     # Node affinity rules
     nodeAffinity:
       # -- Default node affinity rules. Either: `none`, `soft` or `hard`
@@ -147,17 +147,17 @@ global:
   # -- Default [TopologySpreadConstraints] rules for all components
   ## Ref: https://kubernetes.io/docs/concepts/scheduling-eviction/topology-spread-constraints/
   ## If labelSelector is left out, it will default to the labelSelector of the component
-  topologySpreadConstraints: []
-    # - maxSkew: 1
-    #   topologyKey: topology.kubernetes.io/zone
-    #   whenUnsatisfiable: DoNotSchedule
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: ScheduleAnyway
 
   # -- Deployment strategy for the all deployed Deployments
-  deploymentStrategy: {}
-    # type: RollingUpdate
-    # rollingUpdate:
-    #   maxSurge: 25%
-    #   maxUnavailable: 25%
+  deploymentStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 0
 
   # -- Environment variables to pass to all deployed Deployments
   env: []
@@ -762,7 +762,7 @@ controller:
   # Additional replicas will cause sharding of managed clusters across number of replicas.
   ## With dynamic cluster distribution turned on, sharding of the clusters will gracefully
   ## rebalance if the number of replica's changes or one becomes unhealthy. (alpha)
-  replicas: 1
+  replicas: 3
 
   # -- Enable dynamic cluster distribution (alpha)
   # Ref: https://argo-cd.readthedocs.io/en/stable/operator-manual/dynamic-cluster-distribution
@@ -770,7 +770,7 @@ controller:
   ## When replicas are added or removed, the sharding algorithm is re-run to ensure that the
   ## clusters are distributed according to the algorithm. If the algorithm is well-balanced,
   ## like round-robin, then the shards will be well-balanced.
-  dynamicClusterDistribution: false
+  dynamicClusterDistribution: true
 
   # -- Runtime class name for the application controller
   # @default -- `""` (defaults to global.runtimeClassName)
@@ -787,7 +787,7 @@ controller:
   ## Ref: https://kubernetes.io/docs/tasks/run-application/configure-pdb/
   pdb:
     # -- Deploy a [PodDisruptionBudget] for the application controller
-    enabled: false
+    enabled: true
     # -- Labels to be added to application controller pdb
     labels: {}
     # -- Annotations to be added to application controller pdb
@@ -797,7 +797,7 @@ controller:
     minAvailable: ""
     # -- Number of pods that are unavailable after eviction as number or percentage (eg.: 50%).
     ## Has higher precedence over `controller.pdb.minAvailable`
-    maxUnavailable: ""
+    maxUnavailable: 1
 
   ## Application controller Vertical Pod Autoscaler
   ## Ref: https://kubernetes.io/docs/concepts/workloads/autoscaling/#scaling-workloads-vertically/
@@ -909,13 +909,13 @@ controller:
   podLabels: {}
 
   # -- Resource limits and requests for the application controller pods
-  resources: {}
-  #  limits:
-  #    cpu: 500m
-  #    memory: 512Mi
-  #  requests:
-  #    cpu: 250m
-  #    memory: 256Mi
+  resources:
+    limits:
+      cpu: "1"
+      memory: 1Gi
+    requests:
+      cpu: 500m
+      memory: 512Mi
 
   # Application controller container ports
   containerPorts:
@@ -1115,6 +1115,9 @@ dex:
   # -- Dex name
   name: dex-server
 
+  # -- The number of Dex server pods to run
+  replicas: 3
+
   # -- Additional command line arguments to pass to the Dex server
   extraArgs: []
 
@@ -1162,7 +1165,7 @@ dex:
   ## Ref: https://kubernetes.io/docs/tasks/run-application/configure-pdb/
   pdb:
     # -- Deploy a [PodDisruptionBudget] for the Dex server
-    enabled: false
+    enabled: true
     # -- Labels to be added to Dex server pdb
     labels: {}
     # -- Annotations to be added to Dex server pdb
@@ -1172,7 +1175,7 @@ dex:
     minAvailable: ""
     # -- Number of pods that are unavailble after eviction as number or percentage (eg.: 50%).
     ## Has higher precedence over `dex.pdb.minAvailable`
-    maxUnavailable: ""
+    maxUnavailable: 1
 
   ## Dex image
   image:
@@ -1271,13 +1274,13 @@ dex:
   podLabels: {}
 
   # -- Resource limits and requests for dex
-  resources: {}
-  #  limits:
-  #    cpu: 50m
-  #    memory: 64Mi
-  #  requests:
-  #    cpu: 10m
-  #    memory: 32Mi
+  resources:
+    limits:
+      cpu: 100m
+      memory: 128Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
 
   # Dex container ports
   # NOTE: These ports are currently hardcoded and cannot be changed
@@ -1423,8 +1426,8 @@ dex:
 
 ## Redis
 redis:
-  # -- Enable redis
-  enabled: true
+  # -- Enable redis (disabled in favor of redis-ha for production HA)
+  enabled: false
   # -- Redis name
   name: redis
 
@@ -1436,7 +1439,7 @@ redis:
   ## Ref: https://kubernetes.io/docs/tasks/run-application/configure-pdb/
   pdb:
     # -- Deploy a [PodDisruptionBudget] for the Redis
-    enabled: false
+    enabled: true
     # -- Labels to be added to Redis pdb
     labels: {}
     # -- Annotations to be added to Redis pdb
@@ -1446,7 +1449,7 @@ redis:
     minAvailable: ""
     # -- Number of pods that are unavailble after eviction as number or percentage (eg.: 50%).
     ## Has higher precedence over `redis.pdb.minAvailable`
-    maxUnavailable: ""
+    maxUnavailable: 1
 
   ## Redis image
   image:
@@ -1601,13 +1604,13 @@ redis:
   podLabels: {}
 
   # -- Resource limits and requests for redis
-  resources: {}
-  #  limits:
-  #    cpu: 200m
-  #    memory: 128Mi
-  #  requests:
-  #    cpu: 100m
-  #    memory: 64Mi
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 200m
+      memory: 256Mi
 
   # -- Redis pod-level security context
   # @default -- See [values.yaml]
@@ -1743,7 +1746,7 @@ redis:
 # Ref: https://github.com/DandyDeveloper/charts/blob/master/charts/redis-ha/values.yaml
 redis-ha:
   # -- Enables the Redis HA subchart and disables the custom Redis single node deployment
-  enabled: false
+  enabled: true
   ## Redis image
   image:
     # -- Redis repository
@@ -1761,7 +1764,10 @@ redis-ha:
     tag: v1.75.0
   persistentVolume:
     # -- Configures persistence on Redis nodes
-    enabled: false
+    enabled: true
+    # -- StorageClass left empty to use the cluster default (cloud-agnostic)
+    storageClass: ""
+    size: 10Gi
   ## Redis specific configuration options
   redis:
     # -- Redis convention for naming the cluster group: must match `^[\\w-\\.]+$` and can be templated
@@ -1890,13 +1896,13 @@ redisSecretInit:
   podLabels: {}
 
   # -- Resource limits and requests for Redis secret-init Job
-  resources: {}
-  #  limits:
-  #    cpu: 200m
-  #    memory: 128Mi
-  #  requests:
-  #    cpu: 100m
-  #    memory: 64Mi
+  resources:
+    limits:
+      cpu: 200m
+      memory: 128Mi
+    requests:
+      cpu: 100m
+      memory: 64Mi
 
   # -- Application controller container-level security context
   # @default -- See [values.yaml]
@@ -1944,7 +1950,7 @@ server:
   name: server
 
   # -- The number of server pods to run
-  replicas: 1
+  replicas: 3
 
   # -- Runtime class name for the Argo CD server
   # @default -- `""` (defaults to global.runtimeClassName)
@@ -1984,7 +1990,7 @@ server:
   ## Ref: https://kubernetes.io/docs/tasks/run-application/configure-pdb/
   pdb:
     # -- Deploy a [PodDisruptionBudget] for the Argo CD server
-    enabled: false
+    enabled: true
     # -- Labels to be added to Argo CD server pdb
     labels: {}
     # -- Annotations to be added to Argo CD server pdb
@@ -1994,7 +2000,7 @@ server:
     minAvailable: ""
     # -- Number of pods that are unavailable after eviction as number or percentage (eg.: 50%).
     ## Has higher precedence over `server.pdb.minAvailable`
-    maxUnavailable: ""
+    maxUnavailable: 1
 
   ## Argo CD server image
   image:
@@ -2152,13 +2158,13 @@ server:
   podLabels: {}
 
   # -- Resource limits and requests for the Argo CD server
-  resources: {}
-  #  limits:
-  #    cpu: 100m
-  #    memory: 128Mi
-  #  requests:
-  #    cpu: 50m
-  #    memory: 64Mi
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
 
   # Server container ports
   containerPorts:
@@ -2734,7 +2740,7 @@ repoServer:
   name: repo-server
 
   # -- The number of repo server pods to run
-  replicas: 1
+  replicas: 3
 
   # -- Runtime class name for the repo server
   # @default -- `""` (defaults to global.runtimeClassName)
@@ -2774,7 +2780,7 @@ repoServer:
   ## Ref: https://kubernetes.io/docs/tasks/run-application/configure-pdb/
   pdb:
     # -- Deploy a [PodDisruptionBudget] for the repo server
-    enabled: false
+    enabled: true
     # -- Labels to be added to repo server pdb
     labels: {}
     # -- Annotations to be added to repo server pdb
@@ -2784,7 +2790,7 @@ repoServer:
     minAvailable: ""
     # -- Number of pods that are unavailable after eviction as number or percentage (eg.: 50%).
     ## Has higher precedence over `repoServer.pdb.minAvailable`
-    maxUnavailable: ""
+    maxUnavailable: 1
 
   ## Repo server image
   image:
@@ -2929,13 +2935,13 @@ repoServer:
   podLabels: {}
 
   # -- Resource limits and requests for the repo server pods
-  resources: {}
-  #  limits:
-  #    cpu: 50m
-  #    memory: 128Mi
-  #  requests:
-  #    cpu: 10m
-  #    memory: 64Mi
+  resources:
+    limits:
+      cpu: "1"
+      memory: 1Gi
+    requests:
+      cpu: 250m
+      memory: 256Mi
 
   # Repo server container ports
   containerPorts:
@@ -3153,7 +3159,7 @@ applicationSet:
   name: applicationset-controller
 
   # -- The number of ApplicationSet controller pods to run
-  replicas: 1
+  replicas: 3
 
   # -- Runtime class name for the ApplicationSet controller
   # @default -- `""` (defaults to global.runtimeClassName)
@@ -3163,7 +3169,7 @@ applicationSet:
   ## Ref: https://kubernetes.io/docs/tasks/run-application/configure-pdb/
   pdb:
     # -- Deploy a [PodDisruptionBudget] for the ApplicationSet controller
-    enabled: false
+    enabled: true
     # -- Labels to be added to ApplicationSet controller pdb
     labels: {}
     # -- Annotations to be added to ApplicationSet controller pdb
@@ -3173,7 +3179,7 @@ applicationSet:
     minAvailable: ""
     # -- Number of pods that are unavailable after eviction as number or percentage (eg.: 50%).
     ## Has higher precedence over `applicationSet.pdb.minAvailable`
-    maxUnavailable: ""
+    maxUnavailable: 1
 
   ## ApplicationSet controller image
   image:
@@ -3314,13 +3320,13 @@ applicationSet:
   podLabels: {}
 
   # -- Resource limits and requests for the ApplicationSet controller pods.
-  resources: {}
-    # limits:
-    #   cpu: 100m
-    #   memory: 128Mi
-    # requests:
-    #   cpu: 100m
-    #   memory: 128Mi
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 200m
+      memory: 256Mi
 
   # ApplicationSet controller container ports
   containerPorts:
@@ -3534,6 +3540,9 @@ notifications:
   # -- Notifications controller name string
   name: notifications-controller
 
+  # -- The number of notifications controller pods to run (uses leader election for HA)
+  replicas: 2
+
   # -- Argo CD dashboard url; used in place of {{.context.argocdUrl}} in templates
   # @default -- `""` (defaults to https://`global.domain`)
   argocdUrl: ""
@@ -3546,7 +3555,7 @@ notifications:
   ## Ref: https://kubernetes.io/docs/tasks/run-application/configure-pdb/
   pdb:
     # -- Deploy a [PodDisruptionBudget] for the notifications controller
-    enabled: false
+    enabled: true
     # -- Labels to be added to notifications controller pdb
     labels: {}
     # -- Annotations to be added to notifications controller pdb
@@ -3556,7 +3565,7 @@ notifications:
     minAvailable: ""
     # -- Number of pods that are unavailable after eviction as number or percentage (eg.: 50%).
     ## Has higher precedence over `notifications.pdb.minAvailable`
-    maxUnavailable: ""
+    maxUnavailable: 1
 
   ## Notifications controller image
   image:
@@ -3706,13 +3715,13 @@ notifications:
   podLabels: {}
 
   # -- Resource limits and requests for the notifications controller
-  resources: {}
-    # limits:
-    #   cpu: 100m
-    #   memory: 128Mi
-    # requests:
-    #   cpu: 100m
-    #   memory: 128Mi
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
 
   # Notification controller container ports
   containerPorts:

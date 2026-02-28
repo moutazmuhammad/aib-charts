@@ -16,7 +16,7 @@ metadata:
       {{- toYaml . | nindent 4 }}
     {{- end }}
 spec:
-  replicas: 1
+  replicas: {{ .Values.notifications.replicas | default 1 }}
   revisionHistoryLimit: {{ .Values.global.revisionHistoryLimit }}
   {{- with include "argo-cd.strategy" (mergeOverwrite (deepCopy .Values.global.deploymentStrategy) .Values.notifications.deploymentStrategy) }}
   strategy:
