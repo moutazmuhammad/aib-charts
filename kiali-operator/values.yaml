@@ -5,7 +5,7 @@ image: # see: https://quay.io/repository/kiali/kiali-operator?tab=tags
   repo: quay.io/kiali/kiali-operator # quay.io/kiali/kiali-operator
   tag: v2.22.0 # version string like v1.39.0 or a digest hash
   digest: "" # use "sha256" if tag is a sha256 hash (do NOT prefix this value with a "@")
-  pullPolicy: Always
+  pullPolicy: IfNotPresent
   pullSecrets: []
 
 # Deployment options for the operator pod.
@@ -17,12 +17,37 @@ env: []
 tolerations: []
 resources:
   requests:
-    cpu: "10m"
-    memory: "64Mi"
+    cpu: "50m"
+    memory: "128Mi"
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
 affinity: {}
-replicaCount: 1
+replicaCount: 3
 priorityClassName: ""
 securityContext: {}
+
+# Topology spread constraints to ensure pods are distributed across nodes/zones.
+# This is critical for high availability in production.
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels: {}
+
+# PodDisruptionBudget ensures minimum availability during voluntary disruptions.
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Persistent storage for operator data (ansible caching, temporary state).
+# Uses generic PVCs with no cloud-specific storage class for portability.
+persistence:
+  enabled: false
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  size: 1Gi
 
 # This helm chart will create Kubernetes resources such as cluster roles, cluster role bindings, and service accounts.
 # For very rare use-cases, users may want to manage some of these resources manually, outside
@@ -45,7 +70,7 @@ metrics:
 # debug.verbosity: defines the amount of details the operator will log (higher numbers are more noisy)
 # debug.enableProfiler: when true (regardless of debug.enabled), timings for the most expensive tasks will be logged after each reconciliation loop
 debug:
-  enabled: true
+  enabled: false
   verbosity: "1"
   enableProfiler: false
 
@@ -124,3 +149,11 @@ cr:
   spec:
     deployment:
       cluster_wide_access: true
+      replicas: 3
+      resources:
+        requests:
+          cpu: "50m"
+          memory: "128Mi"
+        limits:
+          cpu: "500m"
+          memory: "1Gi"

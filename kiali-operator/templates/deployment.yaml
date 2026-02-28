@@ -42,6 +42,17 @@ spec:
       nodeSelector:
       {{- toYaml .Values.nodeSelector | nindent 8 }}
       {{- end }}
+      {{- if .Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+      {{- range .Values.topologySpreadConstraints }}
+      - maxSkew: {{ .maxSkew }}
+        topologyKey: {{ .topologyKey }}
+        whenUnsatisfiable: {{ .whenUnsatisfiable }}
+        labelSelector:
+          matchLabels:
+          {{- include "kiali-operator.selectorLabels" $ | nindent 12 }}
+      {{- end }}
+      {{- end }}
       containers:
       - name: operator
         image: "{{ .Values.image.repo }}{{ if .Values.image.digest }}@{{ .Values.image.digest }}{{ end }}:{{ .Values.image.tag }}"
@@ -86,6 +97,10 @@ spec:
         volumeMounts:
         - mountPath: /tmp
           name: tmp
+        {{- if .Values.persistence.enabled }}
+        - mountPath: /data
+          name: data
+        {{- end }}
         env:
         - name: WATCH_NAMESPACE
           value: {{ .Values.watchNamespace | default "\"\""  }}
@@ -154,6 +169,11 @@ spec:
       volumes:
       - name: tmp
         emptyDir: {}
+      {{- if .Values.persistence.enabled }}
+      - name: data
+        persistentVolumeClaim:
+          claimName: {{ include "kiali-operator.fullname" . }}
+      {{- end }}
       affinity:
       {{- toYaml .Values.affinity | nindent 8 }}
 ...
