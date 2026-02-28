@@ -1,14 +1,29 @@
 ---
+# ============================================================================
+# Production-Ready Nexus Repository Manager Configuration
+# Cloud-Agnostic: Works on any Kubernetes cluster (on-prem, AWS, Azure, GCP)
+# ============================================================================
+
 statefulset:
-  # This is not supported
+  # This is not supported by the upstream chart
   enabled: false
+
+# -- Number of replicas.
+# IMPORTANT: Nexus Repository Manager OSS uses an embedded database and does
+# NOT support running multiple replicas. Running more than 1 replica will cause
+# data corruption. For HA, use Sonatype's official HA/Resiliency chart with
+# PostgreSQL: https://github.com/sonatype/nxrm3-ha-repository
+replicaCount: 1
+
 deploymentStrategy: Recreate
+
 image:
   # Sonatype Official Public Image
   repository: sonatype/nexus3
   tag: 3.64.0
   pullPolicy: IfNotPresent
-imagePullSecrets:
+
+imagePullSecrets: []
 # for image registries that require login, specify the name of the existing
 # kubernetes secret
 #   - name: <pull-secret-name>
@@ -21,12 +36,12 @@ nexus:
     #     port: 5000
     #     secretName: registry-secret
   env:
-    # minimum recommended memory settings for a small, person instance from
+    # Production-recommended memory settings from
     # https://help.sonatype.com/repomanager3/product-information/system-requirements
     - name: INSTALL4J_ADD_VM_PARAMS
       value: |-
-        -Xms2703M -Xmx2703M
-        -XX:MaxDirectMemorySize=2703M
+        -Xms4G -Xmx4G
+        -XX:MaxDirectMemorySize=4G
         -XX:+UnlockExperimentalVMOptions
         -XX:+UseCGroupMemoryLimitForHeap
         -Djava.util.prefs.userRoot=/nexus-data/javaprefs
@@ -36,19 +51,19 @@ nexus:
     override: false
     data:
       nexus.scripts.allowCreation: true
-      # See this article for ldap configuratioon options https://support.sonatype.com/hc/en-us/articles/216597138-Setting-Advanced-LDAP-Connection-Properties-in-Nexus-Repository-Manager
+      # See this article for ldap configuration options https://support.sonatype.com/hc/en-us/articles/216597138-Setting-Advanced-LDAP-Connection-Properties-in-Nexus-Repository-Manager
       # nexus.ldap.env.java.naming.security.authentication: simple
-  # nodeSelector:
-  #   cloud.google.com/gke-nodepool: default-pool
+
+  # -- Production resource requests and limits.
+  # Requests guarantee minimum resources; limits cap maximum usage.
+  # Sized for production workloads per Sonatype recommendations.
   resources:
-  # minimum recommended memory settings for a small, person instance from
-  # https://help.sonatype.com/repomanager3/product-information/system-requirements
-  #   requests:
-  #     cpu: 4
-  #     memory: 8Gi
-  #   limits:
-  #     cpu: 4
-  #     memory: 8Gi
+    requests:
+      cpu: "4"
+      memory: "8Gi"
+    limits:
+      cpu: "4"
+      memory: "8Gi"
 
   # The ports should only be changed if the nexus image uses a different port
   nexusPort: 8081
@@ -118,14 +133,12 @@ ingress:
   #     hosts:
   #       - repo.demo
 
-
 service:
   name: nexus3
   enabled: true
   labels: {}
   annotations: {}
   type: ClusterIP
-
 
 route:
   enabled: false
@@ -141,25 +154,63 @@ nexusProxyRoute:
   annotations:
   # path: /nexus
 
+# -- Persistent storage configuration.
+# Uses generic PVCs with no cloud-specific storage class, allowing the cluster's
+# default StorageClass to provision volumes on any platform.
 persistence:
   enabled: true
   accessMode: ReadWriteOnce
-  ## If defined, storageClass: <storageClass>
-  ## If set to "-", storageClass: "", which disables dynamic provisioning
-  ## If undefined (the default) or set to null, no storageClass spec is
-  ##   set, choosing the default provisioner.  (gp2 on AWS, standard on
-  ##   GKE, AWS & OpenStack)
-  ##
+  # -- Storage size for production. 50Gi is recommended as a starting point
+  # for production workloads. Adjust based on the number of artifacts stored.
+  storageSize: 50Gi
+  # -- StorageClass to use. Leave unset to use the cluster's default StorageClass.
+  # This keeps the chart cloud-agnostic. The default StorageClass will be
+  # gp2/gp3 on AWS, pd-standard on GCP, managed-premium on Azure, or whatever
+  # the cluster administrator has configured for on-prem.
+  # storageClass: ""
   # existingClaim:
   # annotations:
   #  "helm.sh/resource-policy": keep
-  # storageClass: "-"
-  storageSize: 8Gi
-  # If PersistentDisk already exists you can create a PV for it by including the 2 following keypairs.
-  # pdName: nexus-data-disk
-  # fsType: ext4
 
 tolerations: []
+
+# -- Node affinity and anti-affinity rules.
+# Configure to control pod scheduling across nodes.
+affinity: {}
+# Example: prefer scheduling on nodes with the 'nexus' label
+#   nodeAffinity:
+#     preferredDuringSchedulingIgnoredDuringExecution:
+#       - weight: 100
+#         preference:
+#           matchExpressions:
+#             - key: workload-type
+#               operator: In
+#               values:
+#                 - nexus
+
+# -- Topology spread constraints for distributing pods across failure domains.
+topologySpreadConstraints: []
+# Example:
+#   - maxSkew: 1
+#     topologyKey: topology.kubernetes.io/zone
+#     whenUnsatisfiable: ScheduleAnyway
+#     labelSelector:
+#       matchLabels:
+#         app.kubernetes.io/name: nexus-repository-manager
+
+# -- PodDisruptionBudget to ensure availability during voluntary disruptions
+# (e.g., node drains, cluster upgrades).
+podDisruptionBudget:
+  enabled: true
+  # -- Minimum number of pods that must remain available.
+  # Set to 1 for single-replica deployments to block drains until the pod
+  # is safely rescheduled.
+  minAvailable: 1
+  # maxUnavailable: 1
+
+# -- Priority class for the Nexus pod.
+# Use this to ensure Nexus gets priority during resource contention.
+# priorityClassName: ""
 
 # Enable configmap and add data in configmap
 config:

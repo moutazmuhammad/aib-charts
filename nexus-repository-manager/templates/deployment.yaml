@@ -14,7 +14,7 @@ metadata:
     {{ toYaml .Values.deployment.annotations | nindent 4 }}
 {{- end }}
 spec:
-  replicas: 1
+  replicas: {{ .Values.replicaCount | default 1 }}
   strategy:
     type: {{ .Values.deploymentStrategy }}
   selector:
@@ -167,4 +167,15 @@ spec:
     {{- with .Values.tolerations }}
       tolerations:
         {{ toYaml . | nindent 8 }}
+    {{- end }}
+    {{- with .Values.affinity }}
+      affinity:
+        {{ toYaml . | nindent 8 }}
+    {{- end }}
+    {{- with .Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{ toYaml . | nindent 8 }}
+    {{- end }}
+    {{- if .Values.priorityClassName }}
+      priorityClassName: {{ .Values.priorityClassName | quote }}
     {{- end }}

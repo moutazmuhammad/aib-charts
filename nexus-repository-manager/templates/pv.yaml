@@ -1,26 +1,16 @@
-{{- if not .Values.statefulset.enabled }}
-{{- if .Values.persistence.pdName -}}
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: {{ .Values.persistence.pdName }}
-  labels:
-{{ include "nexus.labels" . | indent 4 }}
-    {{- if .Values.nexus.extraLabels }}
-      {{- with .Values.nexus.extraLabels }}
-        {{ toYaml . | indent 4 }}
-      {{- end }}
-    {{- end }}
-spec:
-  capacity:
-    storage: {{ .Values.persistence.storageSize }}
-  accessModes:
-    - ReadWriteOnce
-  claimRef:
-    namespace: {{ .Release.Namespace }}
-    name: {{ template "nexus.fullname" . }}-data
-  gcePersistentDisk:
-    pdName: {{ .Values.persistence.pdName }}
-    fsType: {{ .Values.persistence.fsType }}
-{{- end }}
-{{- end }}
+{{/*
+  Cloud-agnostic storage: This chart relies on PersistentVolumeClaims (PVCs)
+  and the cluster's default StorageClass for dynamic provisioning.
+
+  No cloud-specific PersistentVolume (PV) is created. The cluster's CSI driver
+  or storage provisioner will handle volume creation automatically.
+
+  Previously, this template contained a GCP-specific gcePersistentDisk PV.
+  That has been removed to ensure the chart works on any Kubernetes cluster
+  (on-prem, AWS, Azure, GCP, or any other platform).
+
+  If you need to bind to a pre-existing volume, use:
+    persistence.existingClaim: <your-pvc-name>
+  Or set a specific storageClass:
+    persistence.storageClass: <your-storage-class>
+*/}}
