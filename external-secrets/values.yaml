@@ -2,17 +2,17 @@
 global:
   nodeSelector: {}
   tolerations: []
-  topologySpreadConstraints: []
-  #  - maxSkew: 1
-  #    topologyKey: topology.kubernetes.io/zone
-  #    whenUnsatisfiable: ScheduleAnyway
-  #    matchLabelKeys:
-  #      - pod-template-hash
-  #  - maxSkew: 1
-  #    topologyKey: kubernetes.io/hostname
-  #    whenUnsatisfiable: DoNotSchedule
-  #    matchLabelKeys:
-  #      - pod-template-hash
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: ScheduleAnyway
+      matchLabelKeys:
+        - pod-template-hash
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: DoNotSchedule
+      matchLabelKeys:
+        - pod-template-hash
   affinity: {}
   # -- Global hostAliases to be applied to all deployments
   hostAliases: []
@@ -33,7 +33,7 @@ global:
       # disabled - No modification applied.
       adaptSecurityContext: auto
 
-replicaCount: 1
+replicaCount: 3
 
 bitwarden-sdk-server:
   enabled: false
@@ -88,7 +88,7 @@ commonLabels: {}
 
 # -- If true, external-secrets will perform leader election between instances to ensure no more
 # than one instance of external-secrets operates at a time.
-leaderElect: false
+leaderElect: true
 
 # -- If set external secrets will filter matching
 # Secret Stores with the appropriate controller values.
@@ -156,7 +156,7 @@ enableHTTP2: false
 
 # -- Specifies the number of concurrent ExternalSecret Reconciles external-secret executes at
 # a time.
-concurrent: 1
+concurrent: 5
 # -- Specifies Log Params to the External Secrets Operator
 log:
   level: info
@@ -242,10 +242,13 @@ securityContext:
   seccompProfile:
     type: RuntimeDefault
 
-resources: {}
-  # requests:
-  #   cpu: 10m
-  #   memory: 32Mi
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
 
 serviceMonitor:
   # -- Specifies whether to create a ServiceMonitor resource for collecting Prometheus metrics
@@ -343,7 +346,7 @@ grafanaDashboard:
 
 livenessProbe:
   # -- Enabled determines if the liveness probe should be used or not. By default it's disabled.
-  enabled: false
+  enabled: true
   # -- The body of the liveness probe settings.
   spec:
     # -- Address for liveness probe.
@@ -372,16 +375,26 @@ nodeSelector: {}
 
 tolerations: []
 
-topologySpreadConstraints: []
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: topology.kubernetes.io/zone
+    whenUnsatisfiable: ScheduleAnyway
+    matchLabelKeys:
+      - pod-template-hash
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: DoNotSchedule
+    matchLabelKeys:
+      - pod-template-hash
 
 affinity: {}
 
 # -- Pod priority class name.
-priorityClassName: ""
+priorityClassName: "system-cluster-critical"
 
 # -- Pod disruption budget - for more details see https://kubernetes.io/docs/concepts/workloads/pods/disruptions/
 podDisruptionBudget:
-  enabled: false
+  enabled: true
   minAvailable: 1    # @schema type:[integer, string]
   nameOverride: ""
   # maxUnavailable: "50%"
@@ -402,7 +415,7 @@ webhook:
   certCheckInterval: "5m"
   # -- Specifies the lookaheadInterval for certificate validity
   lookaheadInterval: ""
-  replicaCount: 1
+  replicaCount: 3
   # -- Specifies Log Params to the Webhook
   log:
     level: info
@@ -494,7 +507,17 @@ webhook:
 
   tolerations: []
 
-  topologySpreadConstraints: []
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: ScheduleAnyway
+      matchLabelKeys:
+        - pod-template-hash
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: DoNotSchedule
+      matchLabelKeys:
+        - pod-template-hash
 
   affinity: {}
 
@@ -502,11 +525,11 @@ webhook:
   strategy: {}
 
     # -- Pod priority class name.
-  priorityClassName: ""
+  priorityClassName: "system-cluster-critical"
 
   # -- Pod disruption budget - for more details see https://kubernetes.io/docs/concepts/workloads/pods/disruptions/
   podDisruptionBudget:
-    enabled: false
+    enabled: true
     minAvailable: 1    # @schema type:[integer, string]
     nameOverride: ""
     # maxUnavailable: "50%"
@@ -576,10 +599,13 @@ webhook:
     seccompProfile:
       type: RuntimeDefault
 
-  resources: {}
-      # requests:
-      #   cpu: 10m
-      #   memory: 32Mi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
 
   # -- Manage the service through which the webhook is reached.
   service:
@@ -599,7 +625,7 @@ certController:
   # -- Specifies whether a certificate controller deployment be created.
   create: true
   requeueInterval: "5m"
-  replicaCount: 1
+  replicaCount: 3
   # -- Specifies Log Params to the Certificate Controller
   log:
     level: info
@@ -635,7 +661,17 @@ certController:
 
   tolerations: []
 
-  topologySpreadConstraints: []
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: ScheduleAnyway
+      matchLabelKeys:
+        - pod-template-hash
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: DoNotSchedule
+      matchLabelKeys:
+        - pod-template-hash
 
   affinity: {}
 
@@ -648,12 +684,12 @@ certController:
   # @schema type: [boolean, null]
   hostUsers:
 
-    # -- Pod priority class name.
-  priorityClassName: ""
+  # -- Pod priority class name.
+  priorityClassName: "system-cluster-critical"
 
   # -- Pod disruption budget - for more details see https://kubernetes.io/docs/concepts/workloads/pods/disruptions/
   podDisruptionBudget:
-    enabled: false
+    enabled: true
     minAvailable: 1    # @schema type:[integer, string]
     nameOverride: ""
     # maxUnavailable: "50%"
@@ -681,7 +717,7 @@ certController:
 
   startupProbe:
     # -- Enabled determines if the startup probe should be used or not. By default it's enabled
-    enabled: false
+    enabled: true
     # -- whether to use the readiness probe port for startup probe.
     useReadinessProbePort: true
     # -- Port for startup probe.
@@ -726,10 +762,13 @@ certController:
     seccompProfile:
       type: RuntimeDefault
 
-  resources: {}
-      # requests:
-      #   cpu: 10m
-      #   memory: 32Mi
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
 
 # -- Specifies `dnsPolicy` to deployment
 dnsPolicy: ClusterFirst
