@@ -2,10 +2,10 @@
 # For instance, instead of `--set _internal_defaults_do_not_set.foo=bar``, just set `--set foo=bar`.
 _internal_defaults_do_not_set:
   autoscaleEnabled: true
-  autoscaleMin: 1
+  autoscaleMin: 2
   autoscaleMax: 5
   autoscaleBehavior: {}
-  replicaCount: 1
+  replicaCount: 2
   rollingMaxSurge: 100%
   rollingMaxUnavailable: 25%
 
@@ -17,14 +17,18 @@ _internal_defaults_do_not_set:
   image: pilot
   traceSampling: 1.0
 
-  # Resources for a small pilot install
+  # Resources for a production pilot install
   resources:
     requests:
       cpu: 500m
       memory: 2048Mi
+    limits:
+      cpu: "2"
+      memory: 4096Mi
 
   # Set to `type: RuntimeDefault` to use the default profile if available.
-  seccompProfile: {}
+  seccompProfile:
+    type: RuntimeDefault
 
   # Whether to use an existing CNI installation
   cni:
@@ -47,7 +51,15 @@ _internal_defaults_do_not_set:
     # What namespace the untaint controller should watch for istio-cni pods. This is only required when istio-cni is running in a different namespace than istiod
     namespace: ""
 
-  affinity: {}
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchLabels:
+                app: istiod
+            topologyKey: kubernetes.io/hostname
 
   tolerations: []
 
@@ -71,7 +83,13 @@ _internal_defaults_do_not_set:
   serviceAccountAnnotations: {}
   sidecarInjectorWebhookAnnotations: {}
 
-  topologySpreadConstraints: []
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          app: istiod
 
   # You can use jwksResolverExtraRootCA to provide a root certificate
   # in PEM format. This will then be trusted by pilot when resolving
@@ -218,6 +236,17 @@ _internal_defaults_do_not_set:
   # See https://istio.io/docs/reference/config/istio.mesh.v1alpha1/ for all available options
   meshConfig:
     enablePrometheusMerge: true
+    # Allow outbound traffic to external services by default
+    outboundTrafficPolicy:
+      mode: ALLOW_ANY
+    # Enable access logging to stdout for observability
+    accessLogFile: /dev/stdout
+    accessLogEncoding: JSON
+    # Default retry policy for resilience
+    defaultHttpRetryPolicy:
+      attempts: 2
+      retryOn: "connect-failure,refused-stream,unavailable,cancelled,retriable-status-codes"
+      retryRemoteLocalities: true
 
   experimental:
     stableValidationPolicy: false
@@ -276,7 +305,7 @@ _internal_defaults_do_not_set:
       enableAnalysis: false
 
     # To output all istio components logs in json format by adding --log_as_json argument to each container argument
-    logAsJson: false
+    logAsJson: true
 
     # In order to use native nftable rules instead of iptable rules, set this flag to true.
     nativeNftables: false

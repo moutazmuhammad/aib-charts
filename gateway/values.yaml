@@ -62,7 +62,7 @@ _internal_defaults_do_not_set:
     annotations: {}
     loadBalancerIP: ""
     loadBalancerSourceRanges: []
-    externalTrafficPolicy: ""
+    externalTrafficPolicy: Local
     externalIPs: []
     ipFamilyPolicy: ""
     ipFamilies: []
@@ -81,7 +81,7 @@ _internal_defaults_do_not_set:
 
   autoscaling:
     enabled: true
-    minReplicas: 1
+    minReplicas: 2
     maxReplicas: 5
     targetCPUUtilizationPercentage: 80
     targetMemoryUtilizationPercentage: {}
@@ -125,9 +125,23 @@ _internal_defaults_do_not_set:
 
   tolerations: []
 
-  topologySpreadConstraints: []
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          istio: ingress
 
-  affinity: {}
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchLabels:
+                istio: ingress
+            topologyKey: kubernetes.io/hostname
 
   # If specified, the gateway will act as a network gateway for the given network.
   networkGateway: ""
@@ -169,7 +183,8 @@ _internal_defaults_do_not_set:
   #
   # podDisruptionBudget: {}
   #
-  podDisruptionBudget: {}
+  podDisruptionBudget:
+    minAvailable: 1
 
   # Sets the per-pod terminationGracePeriodSeconds setting.
   terminationGracePeriodSeconds: 30
