@@ -1,0 +1,80 @@
+# ArgoCD - Dev environment
+
+global:
+  domain: argocd.dev.example.com
+  logging:
+    format: text
+    level: info
+
+configs:
+  cm:
+    url: https://argocd.dev.example.com
+    admin.enabled: "true"
+  params:
+    server.insecure: true
+
+controller:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 1
+      memory: 1Gi
+
+server:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  ingress:
+    enabled: true
+    ingressClassName: ""
+    hostname: argocd.dev.example.com
+    tls: true
+    annotations:
+      ingress.kubernetes.io/ssl-redirect: "true"
+
+repoServer:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+applicationSet:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+notifications:
+  enabled: true
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+redis:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi

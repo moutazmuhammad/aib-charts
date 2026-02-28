@@ -1,0 +1,93 @@
+# Istio Config - Dev environment
+
+gateway:
+  name: platform-gateway
+  namespace: service-mesh
+  servers:
+    - name: https
+      port: 443
+      protocol: HTTPS
+      tls:
+        mode: SIMPLE
+        credentialName: platform-tls-cert
+      hosts:
+        - "*.dev.example.com"
+    - name: http-redirect
+      port: 80
+      protocol: HTTP
+      tls:
+        httpsRedirect: true
+      hosts:
+        - "*.dev.example.com"
+
+tls:
+  enabled: true
+  issuerRef:
+    name: letsencrypt-staging
+    kind: ClusterIssuer
+  secretName: platform-tls-cert
+  hosts:
+    - "*.dev.example.com"
+
+virtualServices:
+  harbor:
+    enabled: true
+    host: harbor.dev.example.com
+    gateway: platform-gateway
+    destination:
+      host: harbor-core.harbor.svc.cluster.local
+      port: 80
+  nexus:
+    enabled: true
+    host: nexus.dev.example.com
+    gateway: platform-gateway
+    destination:
+      host: nexus-nexus-repository-manager.nexus.svc.cluster.local
+      port: 8081
+  argocd:
+    enabled: true
+    host: argocd.dev.example.com
+    gateway: platform-gateway
+    destination:
+      host: argocd-server.argocd.svc.cluster.local
+      port: 443
+  kiali:
+    enabled: true
+    host: kiali.dev.example.com
+    gateway: platform-gateway
+    destination:
+      host: kiali.kiali.svc.cluster.local
+      port: 20001
+  oauth2proxy:
+    enabled: true
+    host: auth.dev.example.com
+    gateway: platform-gateway
+    destination:
+      host: oauth2-proxy.oauth2-proxy.svc.cluster.local
+      port: 80
+
+destinationRules:
+  harbor:
+    enabled: true
+    host: harbor-core.harbor.svc.cluster.local
+    trafficPolicy:
+      tls:
+        mode: ISTIO_MUTUAL
+  nexus:
+    enabled: true
+    host: nexus-nexus-repository-manager.nexus.svc.cluster.local
+    trafficPolicy:
+      tls:
+        mode: ISTIO_MUTUAL
+  argocd:
+    enabled: true
+    host: argocd-server.argocd.svc.cluster.local
+    trafficPolicy:
+      tls:
+        mode: DISABLE
+  kiali:
+    enabled: true
+    host: kiali.kiali.svc.cluster.local
+    trafficPolicy:
+      tls:
+        mode: ISTIO_MUTUAL

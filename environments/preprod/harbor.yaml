@@ -1,0 +1,140 @@
+# Harbor - Preprod environment
+
+expose:
+  type: ingress
+  tls:
+    enabled: true
+    certSource: secret
+    secret:
+      secretName: harbor-tls
+  ingress:
+    hosts:
+      core: harbor.preprod.example.com
+    className: ""
+    annotations:
+      ingress.kubernetes.io/ssl-redirect: "true"
+      ingress.kubernetes.io/proxy-body-size: "0"
+
+externalURL: https://harbor.preprod.example.com
+
+existingSecretAdminPassword: harbor-credentials
+existingSecretAdminPasswordKey: HARBOR_ADMIN_PASSWORD
+harborAdminPassword: ""
+
+persistence:
+  enabled: true
+  resourcePolicy: "keep"
+  persistentVolumeClaim:
+    registry:
+      storageClass: ""
+      accessMode: ReadWriteOnce
+      size: 100Gi
+    jobservice:
+      jobLog:
+        storageClass: ""
+        accessMode: ReadWriteOnce
+        size: 5Gi
+    database:
+      storageClass: ""
+      accessMode: ReadWriteOnce
+      size: 10Gi
+    redis:
+      storageClass: ""
+      accessMode: ReadWriteOnce
+      size: 5Gi
+    trivy:
+      storageClass: ""
+      accessMode: ReadWriteOnce
+      size: 10Gi
+  imageChartStorage:
+    type: filesystem
+    filesystem:
+      rootdirectory: /storage
+
+portal:
+  replicas: 2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+core:
+  replicas: 2
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+jobservice:
+  replicas: 2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  maxJobWorkers: 10
+
+registry:
+  replicas: 2
+  registry:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+  controller:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+trivy:
+  enabled: true
+  replicas: 1
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+database:
+  type: internal
+  internal:
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+
+redis:
+  type: internal
+  internal:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: false

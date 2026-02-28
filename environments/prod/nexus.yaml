@@ -1,0 +1,49 @@
+# Nexus Repository Manager - Prod environment
+# Note: Nexus does not support multiple replicas (stateful single-instance).
+# HA should be achieved via Nexus Pro clustering or backup/restore strategy.
+
+image:
+  repository: sonatype/nexus3
+  tag: 3.64.0
+  pullPolicy: IfNotPresent
+
+deploymentStrategy: Recreate
+
+nexus:
+  env:
+    - name: INSTALL4J_ADD_VM_PARAMS
+      value: |-
+        -Xms4G -Xmx4G
+        -XX:MaxDirectMemorySize=4G
+        -XX:+UnlockExperimentalVMOptions
+        -Djava.util.prefs.userRoot=/nexus-data/javaprefs
+    - name: NEXUS_SECURITY_RANDOMPASSWORD
+      value: "true"
+  resources:
+    requests:
+      cpu: 2
+      memory: 8Gi
+    limits:
+      cpu: 4
+      memory: 12Gi
+
+persistence:
+  enabled: true
+  accessMode: ReadWriteOnce
+  storageSize: 500Gi
+
+ingress:
+  enabled: true
+  ingressClassName: ""
+  annotations:
+    ingress.kubernetes.io/proxy-body-size: "0"
+  hostPath: /
+  hostRepo: nexus.example.com
+  tls:
+    - secretName: nexus-tls
+      hosts:
+        - nexus.example.com
+
+service:
+  enabled: true
+  type: ClusterIP

@@ -1,0 +1,33 @@
+# Wave 8: OAuth2 Proxy (Authentication)
+# Depends on External Secrets for credentials
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: oauth2-proxy
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: platform
+    app.kubernetes.io/component: authentication
+  annotations:
+    argocd.argoproj.io/sync-wave: "8"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: "REPO_URL"
+    targetRevision: "TARGET_REVISION"
+    path: oauth2-proxy
+    helm:
+      valueFiles:
+        - ../environments/ENVIRONMENT/oauth2-proxy.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: oauth2-proxy
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false

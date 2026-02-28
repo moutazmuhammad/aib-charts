@@ -1,0 +1,33 @@
+# Wave 5: Kiali Operator (Istio observability)
+# Depends on Istio being fully installed
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kiali-operator
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: platform
+    app.kubernetes.io/component: service-mesh
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: "REPO_URL"
+    targetRevision: "TARGET_REVISION"
+    path: kiali-operator
+    helm:
+      valueFiles:
+        - ../environments/ENVIRONMENT/kiali-operator.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kiali
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false

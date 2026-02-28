@@ -1,0 +1,49 @@
+# Kiali Operator - Prod environment
+
+replicaCount: 1
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+
+debug:
+  enabled: false
+  verbosity: "0"
+
+cr:
+  create: true
+  name: kiali
+  namespace: kiali
+  spec:
+    deployment:
+      cluster_wide_access: true
+      replicas: 3
+      resources:
+        requests:
+          cpu: 500m
+          memory: 512Mi
+        limits:
+          cpu: 2000m
+          memory: 2Gi
+    auth:
+      # Use OpenID Connect for production
+      # PLACEHOLDER: configure your OIDC provider
+      strategy: openid
+      openid:
+        client_id: "PLACEHOLDER_KIALI_CLIENT_ID"
+        issuer_uri: "https://idp.example.com"
+        scopes:
+          - openid
+          - profile
+          - email
+    external_services:
+      istio:
+        root_namespace: service-mesh
+      prometheus:
+        url: "http://prometheus.monitoring.svc.cluster.local:9090"
+      grafana:
+        url: ""

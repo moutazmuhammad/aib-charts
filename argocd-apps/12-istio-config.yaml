@@ -1,0 +1,33 @@
+# Wave 12: Istio networking configuration (Gateways, VirtualServices, DestinationRules)
+# Deploys last - all services must be running before routing traffic
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: istio-config
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: platform
+    app.kubernetes.io/component: service-mesh
+  annotations:
+    argocd.argoproj.io/sync-wave: "12"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: "REPO_URL"
+    targetRevision: "TARGET_REVISION"
+    path: istio-config
+    helm:
+      valueFiles:
+        - ../environments/ENVIRONMENT/istio-config.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: service-mesh
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false

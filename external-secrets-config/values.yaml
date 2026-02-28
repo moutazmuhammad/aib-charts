@@ -1,0 +1,131 @@
+# External Secrets configuration
+# Supports multiple backend providers - configure one per environment
+
+# ClusterSecretStore configuration
+clusterSecretStore:
+  name: platform-secret-store
+  # Choose your backend provider: vault, aws, azure, gcp, generic
+  # Only one provider should be enabled per environment
+  provider:
+    # HashiCorp Vault (cloud-agnostic, recommended)
+    vault:
+      enabled: true
+      server: "https://vault.example.com"
+      path: "secret"
+      version: "v2"
+      # Authentication method
+      auth:
+        # Token-based auth (simplest, use for dev)
+        tokenSecretRef:
+          name: vault-token
+          namespace: external-secrets
+          key: token
+    # AWS Secrets Manager
+    aws:
+      enabled: false
+      region: us-east-1
+      service: SecretsManager
+      auth:
+        secretRef:
+          accessKeyID:
+            name: aws-credentials
+            namespace: external-secrets
+            key: access-key-id
+          secretAccessKey:
+            name: aws-credentials
+            namespace: external-secrets
+            key: secret-access-key
+    # Azure Key Vault
+    azure:
+      enabled: false
+      vaultUrl: "https://my-keyvault.vault.azure.net"
+      authSecretRef:
+        clientId:
+          name: azure-credentials
+          namespace: external-secrets
+          key: client-id
+        clientSecret:
+          name: azure-credentials
+          namespace: external-secrets
+          key: client-secret
+      tenantId: ""
+    # GCP Secret Manager
+    gcp:
+      enabled: false
+      projectID: my-project
+      auth:
+        secretRef:
+          secretAccessKeySecretRef:
+            name: gcp-credentials
+            namespace: external-secrets
+            key: secret-access-credentials
+
+# ExternalSecret definitions for platform services
+externalSecrets:
+  # Harbor registry secrets
+  harbor:
+    enabled: true
+    namespace: harbor
+    refreshInterval: 1h
+    secretName: harbor-credentials
+    data:
+      - secretKey: HARBOR_ADMIN_PASSWORD
+        remoteRef:
+          key: platform/harbor
+          property: admin-password
+      - secretKey: secretKey
+        remoteRef:
+          key: platform/harbor
+          property: secret-key
+      - secretKey: REGISTRY_HTTP_SECRET
+        remoteRef:
+          key: platform/harbor
+          property: registry-http-secret
+
+  # OAuth2 Proxy secrets
+  oauth2Proxy:
+    enabled: true
+    namespace: oauth2-proxy
+    refreshInterval: 1h
+    secretName: oauth2-proxy-credentials
+    data:
+      - secretKey: client-id
+        remoteRef:
+          key: platform/oauth2-proxy
+          property: client-id
+      - secretKey: client-secret
+        remoteRef:
+          key: platform/oauth2-proxy
+          property: client-secret
+      - secretKey: cookie-secret
+        remoteRef:
+          key: platform/oauth2-proxy
+          property: cookie-secret
+
+  # ArgoCD secrets
+  argocd:
+    enabled: true
+    namespace: argocd
+    refreshInterval: 1h
+    secretName: argocd-credentials
+    data:
+      - secretKey: admin.password
+        remoteRef:
+          key: platform/argocd
+          property: admin-password
+      - secretKey: server.secretkey
+        remoteRef:
+          key: platform/argocd
+          property: server-secret-key
+
+  # Nexus secrets
+  nexus:
+    enabled: true
+    namespace: nexus
+    refreshInterval: 1h
+    secretName: nexus-credentials
+    data:
+      - secretKey: admin-password
+        remoteRef:
+          key: platform/nexus
+          property: admin-password
