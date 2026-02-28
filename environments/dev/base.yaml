@@ -1,7 +1,0 @@
-# Istio Base - Dev environment
-global:
-  istioNamespace: service-mesh
-base:
-  enableCRDTemplates: true
-  enableIstioConfigCRDs: true
-defaultRevision: "default"
