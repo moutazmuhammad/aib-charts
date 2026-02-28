@@ -1,485 +1,164 @@
-# oauth2-proxy
+# oauth2-proxy - Production-Ready Helm Chart
 
-[oauth2-proxy](https://github.com/oauth2-proxy/oauth2-proxy) is a reverse proxy and static file server that provides authentication using Providers (Google, GitHub, and others) to validate accounts by e-mail, domain, or group.
+[oauth2-proxy](https://github.com/oauth2-proxy/oauth2-proxy) is a reverse proxy and static file server that provides authentication using Providers (Google, GitHub, and others) to validate accounts by email, domain, or group.
 
-## TL;DR;
+This chart has been configured with **production-ready defaults** for cloud-agnostic deployment on any Kubernetes cluster (on-prem, AWS, Azure, GCP, or any other cloud).
 
-```console
-$ helm repo add oauth2-proxy https://oauth2-proxy.github.io/manifests
-$ helm install my-release oauth2-proxy/oauth2-proxy
-```
-
-## Introduction
-
-This chart bootstraps an oauth2-proxy deployment on a [Kubernetes](http://kubernetes.io) cluster using the [Helm](https://helm.sh) package manager.
-
-## Installing the Chart
-
-To install the chart with the release name `my-release`:
+## TL;DR
 
 ```console
-$ helm install my-release oauth2-proxy/oauth2-proxy
+helm install my-release ./oauth2-proxy
 ```
 
-The command deploys oauth2-proxy on the Kubernetes cluster in the default configuration.
-The [configuration](#configuration) section lists the parameters that can be configured during installation.
+## Production-Ready Changes
 
-## Uninstalling the Chart
+The following changes were made to the default `values.yaml` to prepare this chart for production deployment.
 
-To uninstall/delete the `my-release` deployment:
+### 1. High Availability - Replica Count
 
-```console
-$ helm uninstall my-release
-```
+| Setting | Before | After |
+|---------|--------|-------|
+| `replicaCount` | `1` | `3` |
 
-The command removes all the Kubernetes components associated with the chart and deletes the release.
+**Why:** A single replica is a single point of failure. Running 3 replicas ensures the authentication proxy remains available during node failures, rolling updates, and maintenance windows.
 
-## Upgrading an existing Release to a new major version
+### 2. Resource Requests and Limits
 
-A major chart version change (like v1.2.3 -> v2.0.0) indicates an incompatible breaking change needing manual actions.
+**oauth2-proxy container:**
 
-### To 1.0.0
+| Setting | Before | After |
+|---------|--------|-------|
+| `resources.requests.cpu` | _(unset)_ | `100m` |
+| `resources.requests.memory` | _(unset)_ | `128Mi` |
+| `resources.limits.cpu` | _(unset)_ | `200m` |
+| `resources.limits.memory` | _(unset)_ | `256Mi` |
 
-This version upgrades oauth2-proxy to v4.0.0. To upgrade, please see the [changelog](https://github.com/oauth2-proxy/oauth2-proxy/blob/v4.0.0/CHANGELOG.md#v400).
+**waitForRedis init container:**
 
-### To 2.0.0
+| Setting | Before | After |
+|---------|--------|-------|
+| `initContainers.waitForRedis.resources.requests.cpu` | _(unset)_ | `25m` |
+| `initContainers.waitForRedis.resources.requests.memory` | _(unset)_ | `32Mi` |
+| `initContainers.waitForRedis.resources.limits.cpu` | _(unset)_ | `50m` |
+| `initContainers.waitForRedis.resources.limits.memory` | _(unset)_ | `64Mi` |
 
-Version 2.0.0 of this chart introduces support for Kubernetes v1.16.x by addressing the Deployment object apiVersion `apps/v1beta2` deprecation.
-See [the v1.16 API deprecations page](https://kubernetes.io/blog/2019/07/18/api-deprecations-in-1-16/) for more information.
+**Redis HA subchart resources:**
 
-Due to [this issue](https://github.com/helm/helm/issues/6583), errors may occur when performing a `helm upgrade` of this chart from versions earlier than 2.0.0.
+| Component | CPU Request/Limit | Memory Request/Limit |
+|-----------|-------------------|----------------------|
+| Redis | `100m` / `200m` | `128Mi` / `256Mi` |
+| HAProxy | `100m` / `200m` | `128Mi` / `256Mi` |
+| Sentinel | `50m` / `100m` | `64Mi` / `128Mi` |
 
-### To 3.0.0
+**Why:** Without resource requests, the Kubernetes scheduler cannot make intelligent placement decisions. Without limits, a single pod can consume all node resources and cause cascading failures. These values are sized for a typical oauth2-proxy workload and should be adjusted based on observed usage.
 
-Version 3.0.0 introduces support for [EKS IAM roles for service accounts](https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html) by adding a managed service account to the chart.
-This is a breaking change since the service account is enabled by default.
-To disable this behaviour set `serviceAccount.enabled` to `false`
+### 3. Persistent Storage with Generic PVCs
 
-### To 4.0.0
+| Setting | Before | After |
+|---------|--------|-------|
+| `redis-ha.enabled` | `false` | `true` |
+| `redis-ha.replicas` | _(unset)_ | `3` |
+| `redis-ha.persistentVolume.enabled` | _(unset)_ | `true` |
+| `redis-ha.persistentVolume.size` | _(unset)_ | `10Gi` |
+| `redis-ha.persistentVolume.storageClass` | _(unset)_ | `""` (cluster default) |
+| `sessionStorage.type` | `cookie` | `redis` |
 
-Version 4.0.0 adds support for the new Ingress apiVersion **networking.k8s.io/v1**.
-Therefore, the `ingress.extraPaths` parameter must be updated to the new format.
-See the [v1.22 API deprecations guide](https://kubernetes.io/docs/reference/using-api/deprecation-guide/#ingress-v122) for more information.
+**Why:** Redis-backed session storage is more robust than cookie-based storage for production. It allows sessions to survive pod restarts and supports larger session data. The `storageClass` is set to `""` (empty string) which tells Kubernetes to use the cluster's default StorageClass - this is **cloud-agnostic** and works on any cluster (AWS EBS, Azure Disk, GCP PD, Ceph, NFS, local-path, etc.) without requiring any cloud-specific configuration.
 
-For the same reason `service.port` was renamed to `service.portNumber`.
+### 4. Rolling Update Strategy
 
-### To 5.0.0
+| Setting | Before | After |
+|---------|--------|-------|
+| `strategy.type` | _(unset)_ | `RollingUpdate` |
+| `strategy.rollingUpdate.maxSurge` | _(unset)_ | `1` |
+| `strategy.rollingUpdate.maxUnavailable` | _(unset)_ | `0` |
 
-Version 5.0.0 introduces support for custom labels and refactor [Kubernetes recommended labels](https://kubernetes.io/docs/concepts/overview/working-with-objects/common-labels/). 
-This is a breaking change because many labels of all resources need to be updated to stay consistent.
+**Why:** Setting `maxUnavailable: 0` ensures zero-downtime deployments. Kubernetes will always bring up a new pod before terminating an old one during updates.
 
-In order to upgrade, delete the Deployment before upgrading:
+### 5. Pod Disruption Budget
 
-```bash
-kubectl delete deployment my-release-oauth2-proxy
-```
+| Setting | Before | After |
+|---------|--------|-------|
+| `podDisruptionBudget.maxUnavailable` | `null` | `1` |
+| `podDisruptionBudget.minAvailable` | `1` | `null` |
 
-This will introduce a slight downtime.
+**Why:** With 3 replicas, using `maxUnavailable: 1` allows cluster maintenance (node drains, upgrades) while guaranteeing at least 2 pods remain available at all times.
 
-For users who don't want downtime, you can perform these actions:
+### 6. Pod Anti-Affinity
 
-- Perform a non-cascading removal of the deployment that keeps the pods running
-- Add new labels to pods
-- Perform `helm upgrade`
+| Setting | Before | After |
+|---------|--------|-------|
+| `affinity` | _(unset)_ | Pod anti-affinity on `kubernetes.io/hostname` |
 
-### To 6.0.0
+**Why:** Soft (preferred) pod anti-affinity spreads oauth2-proxy replicas across different nodes. This prevents all replicas from being lost if a single node goes down. Using `preferredDuringSchedulingIgnoredDuringExecution` ensures pods can still be scheduled on the same node if no other nodes are available.
 
-Version 6.0.0 bumps the version of the Redis subchart from ~10.6.0 to ~16.4.0. 
-You probably need to adjust your Redis configuration.
-See [here](https://github.com/bitnami/charts/tree/master/bitnami/redis#upgrading) for detailed upgrade instructions.
+### 7. Topology Spread Constraints
 
-### To 7.0.0
+| Setting | Before | After |
+|---------|--------|-------|
+| `topologySpreadConstraints` | _(unset)_ | Spread across `topology.kubernetes.io/zone` |
 
-Version 7.0.0 introduces a new implementation to support multiple hostAliases.
-You probably need to adjust your hostAliases config.
-See [here](https://github.com/oauth2-proxy/manifests/pull/164/) for detailed information.
+**Why:** Distributes pods across availability zones for resilience against zone-level failures. Uses `whenUnsatisfiable: ScheduleAnyway` so it works gracefully on single-zone clusters too.
 
-### To 8.0.0 - Bitnami 💀
+### 8. Pod Security Context
 
-Version 8.0.0 removes the dependency on the Bitnami Redis subchart and replaces it with the `dandydeveloper/redis-ha` chart. Therefore this version introduces a breaking change to the redis subchart deployment configuration. Please refer to the official [redis-ha repository](https://github.com/DandyDeveloper/charts/tree/master/charts/redis-ha) for details. Furthermore, you can reference the redis CI test value files we use [here](https://github.com/oauth2-proxy/manifests/tree/main/helm/oauth2-proxy/ci).
+| Setting | Before | After |
+|---------|--------|-------|
+| `podSecurityContext` | `{}` | `runAsNonRoot`, `runAsUser/Group: 2000`, `fsGroup: 2000`, `seccompProfile: RuntimeDefault` |
 
-Furthermore, you can read up on why this change was necessary in [Breaking changes in Bitnami Catalog #323](https://github.com/oauth2-proxy/manifests/issues/323)
+**Why:** Pod-level security context complements the existing container-level security context. Setting `fsGroup` ensures any persistent volume mounts have the correct group ownership. The `seccompProfile: RuntimeDefault` restricts system calls at the pod level.
 
-### To 9.0.0
+### 9. Graceful Shutdown
 
-Version 9.0.0 introduces a breaking change by splitting the `image.repository` value into `image.registry` and `image.repository` to support 
-custom registries. Furthermore, it introduces the `global.imageRegistry` value to allow for centrally overriding the image registry that is used to pull images.
+| Setting | Before | After |
+|---------|--------|-------|
+| `terminationGracePeriodSeconds` | _(unset, default 30)_ | `65` |
+| `lifecycle.preStop` | _(unset)_ | `sleep 10` |
 
-This means if you were using an override for `image.repository` (to pull from a different artifact repository), you will likely have to adjust it for the new `image.registry` value. See [#367](https://github.com/oauth2-proxy/manifests/pull/367) for detailed information.
+**Why:** The `preStop` hook gives the Kubernetes endpoints controller time to remove the pod from Service endpoints before it starts shutting down. This prevents traffic from being routed to a pod that is terminating. The `terminationGracePeriodSeconds` of 65 allows enough time for the 10-second sleep plus the application's graceful shutdown.
 
-### To 10.0.0
+### 10. Redis HA Configuration
 
-Version 10.0.0 removes the alias for the Redis HA subchart dependency due to compatibility issues with Helm 3. Helm 3 does not support transitive conditional aliases, meaning that even when values were provided in the parent chart to disable the subchart, the aliased values were not respected correctly.
+| Setting | Before | After |
+|---------|--------|-------|
+| `redis-ha.haproxy.enabled` | _(unset)_ | `true` |
+| `redis-ha.haproxy.replicas` | _(unset)_ | `3` |
+| `redis-ha.redis.config.min-replicas-to-write` | _(unset)_ | `1` |
 
-**Breaking Change**: If you were previously using the redis alias to configure the Redis HA subchart, you must now use the actual chart name redis-ha for all configuration values.
+**Why:** HAProxy provides a single stable endpoint for Redis access and handles master failover transparently. Setting `min-replicas-to-write: 1` ensures data is replicated to at least one replica before confirming writes, preventing data loss during failover.
 
-Before:
+## Cloud-Agnostic Design
 
-```yaml
-redis:
-  enabled: true
-  # ... other redis configuration
-```
+This chart avoids any cloud-provider-specific configuration:
 
-After:
+- **No cloud-specific StorageClass**: Uses `""` (empty string) to leverage the cluster's default StorageClass, which is provisioned by whichever CSI driver or storage provider is installed
+- **No cloud-specific annotations**: No AWS ALB, GCP NEG, or Azure-specific annotations are set
+- **No cloud-specific node selectors**: No cloud provider labels are used for scheduling
+- **Standard Kubernetes APIs only**: Uses only stable, widely-supported Kubernetes APIs (apps/v1, policy/v1)
+- **Generic topology keys**: Uses `kubernetes.io/hostname` and `topology.kubernetes.io/zone` which are standard across all Kubernetes distributions
 
-```yaml
-redis-ha:
-  enabled: true
-  # ... other redis-ha configuration
-```
+## Pre-Deployment Checklist
 
-Please update your values files accordingly. Refer to the official [redis-ha repository](https://github.com/DandyDeveloper/charts/tree/master/charts/redis-ha) for available configuration options.
+Before deploying to production, ensure you:
 
-Due to alias removal redis resources recreation will be required in case of default redis chart naming. If you would like to keep your current redis
-naming introduced in version `v8` override redis name to previous alias name like this:
-
-```yaml
-redis-ha:
-  nameOverride: redis
-  enabled: true
-  # ... other redis-ha configuration
-```
-
-With above new chart version won't add extra `-ha` suffix to all redis resources.
+1. **Set OAuth credentials**: Replace the placeholder values in `config.clientID`, `config.clientSecret`, and `config.cookieSecret` (or use `config.existingSecret` to reference a pre-created Secret)
+2. **Configure your provider**: Update `config.configFile` with your OAuth provider settings
+3. **Set a Redis password**: Configure `redis-ha.redisPassword` and ensure `sessionStorage.redis.password` matches
+4. **Enable Ingress or Gateway API**: Configure `ingress` or `gatewayApi` based on your cluster's ingress controller
+5. **Review resource limits**: Adjust CPU/memory based on your expected traffic load
+6. **Enable monitoring**: Set `metrics.serviceMonitor.enabled: true` if you use Prometheus Operator
 
 ## Configuration
 
-The following table lists the configurable parameters of the oauth2-proxy chart and their default values.
+See `values.yaml` for the full list of configurable parameters.
 
-| Parameter                                             | Description                                                                                                                                                                                                                                                      | Default                                                                                              |
-|-------------------------------------------------------| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `affinity`                                            | node/pod affinities                                                                                                                                                                                                                                              | None                                                                                                 |
-| `alphaConfig.annotations`                             | Configmap annotations                                                                                                                                                                                                                                            | `{}`                                                                                                 |
-| `alphaConfig.configData`                              | Arbitrary configuration data to append                                                                                                                                                                                                                           | `{}`                                                                                                 |
-| `alphaConfig.configFile`                              | Arbitrary configuration to append, treated as a Go template and rendered with the root context                                                                                                                                                                   | `""`                                                                                                 |
-| `alphaConfig.enabled`                                 | Flag to toggle any alpha config-related logic                                                                                                                                                                                                                    | `false`                                                                                              |
-| `alphaConfig.existingConfig`                          | existing Kubernetes configmap to use for the alpha configuration file. See [config template](https://github.com/oauth2-proxy/manifests/blob/master/helm/oauth2-proxy/templates/secret-alpha.yaml) for the required values                                        | `nil`                                                                                                |
-| `alphaConfig.existingSecret`                          | existing Kubernetes secret to use for the alpha configuration file. See [config template](https://github.com/oauth2-proxy/manifests/blob/master/helm/oauth2-proxy/templates/secret-alpha.yaml) for the required values                                           | `nil`                                                                                                |
-| `alphaConfig.metricsConfigData`                       | Arbitrary configuration data to append to the metrics section                                                                                                                                                                                                    | `{}`                                                                                                 |
-| `alphaConfig.serverConfigData`                        | Arbitrary configuration data to append to the server section                                                                                                                                                                                                     | `{}`                                                                                                 |
-| `authenticatedEmailsFile.annotations`                 | configmap or secret annotations                                                                                                                                                                                                                                  | `nil`                                                                                                |
-| `authenticatedEmailsFile.enabled`                     | Enables authorize individual e-mail addresses                                                                                                                                                                                                                    | `false`                                                                                              |
-| `authenticatedEmailsFile.persistence`                 | Defines how the e-mail addresses file will be projected, via a configmap or secret                                                                                                                                                                               | `configmap`                                                                                          |
-| `authenticatedEmailsFile.restrictedUserAccessKey`     | The key of the configmap or secret that holds the e-mail addresses list                                                                                                                                                                                          | `""`                                                                                                 |
-| `authenticatedEmailsFile.restricted_access`           | [e-mail addresses](https://oauth2-proxy.github.io/oauth2-proxy/configuration/providers/#email-authentication) list config                                                                                                                                        | `""`                                                                                                 |
-| `authenticatedEmailsFile.template`                    | Name of the configmap or secret that is handled outside of that chart                                                                                                                                                                                            | `""`                                                                                                 |
-| `autoscaling.annotations`                             | Horizontal Pod Autoscaler annotations.                                                                                                                                                                                                                           | `{}`                                                                                                 |
-| `autoscaling.behavior`                                | Configure HPA behavior policies for scaling. See [docs](https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/#configuring-scaling-behavior)                                                                                                 | `{}`                                                                                                 |
-| `autoscaling.enabled`                                 | Deploy a Horizontal Pod Autoscaler.                                                                                                                                                                                                                              | `false`                                                                                              |
-| `autoscaling.maxReplicas`                             | Maximum replicas for the Horizontal Pod Autoscaler.                                                                                                                                                                                                              | `10`                                                                                                 |
-| `autoscaling.minReplicas`                             | Minimum replicas for the Horizontal Pod Autoscaler.                                                                                                                                                                                                              | `1`                                                                                                  |
-| `autoscaling.targetCPUUtilizationPercentage`          | Horizontal Pod Autoscaler setting.                                                                                                                                                                                                                               | `80`                                                                                                 |
-| `autoscaling.targetMemoryUtilizationPercentage`       | Horizontal Pod Autoscaler setting.                                                                                                                                                                                                                               | ``                                                                                                   |
-| `checkDeprecation`                                    | Enable deprecation checks                                                                                                                                                                                                                                        | `true`                                                                                               |
-| `config.clientID`                                     | oauth client ID                                                                                                                                                                                                                                                  | `""`                                                                                                 |
-| `config.clientSecret`                                 | oauth client secret                                                                                                                                                                                                                                              | `""`                                                                                                 |
-| `config.configFile`                                   | custom [oauth2_proxy.cfg](https://github.com/oauth2-proxy/oauth2-proxy/blob/master/contrib/oauth2-proxy.cfg.example) contents for settings not overridable via environment nor command line                                                                      | `""`                                                                                                 |
-| `config.cookieName`                                   | The name of the cookie that oauth2-proxy will create.                                                                                                                                                                                                            | `""`                                                                                                 |
-| `config.cookieSecret`                                 | server specific cookie for the secret; create a new one with `openssl rand -base64 32 \| head -c 32 \| base64`                                                                                                                                                   | `""`                                                                                                 |
-| `config.existingConfig`                               | existing Kubernetes configmap to use for the configuration file. See [config template](https://github.com/oauth2-proxy/manifests/blob/master/helm/oauth2-proxy/templates/configmap.yaml) for the required values                                                 | `nil`                                                                                                |
-| `config.existingSecret`                               | existing Kubernetes secret to use for OAuth2 credentials. See [oauth2-proxy.secrets helper](https://github.com/oauth2-proxy/manifests/blob/main/helm/oauth2-proxy/templates/_helpers.tpl#L157C13-L157C33) for the required values                                | `nil`                                                                                                |
-| `config.google.adminEmail`                            | user impersonated by the Google service account                                                                                                                                                                                                                  | `""`                                                                                                 |
-| `config.google.existingConfig`                        | existing Kubernetes configmap to use for the service account file. See [Google secret template](https://github.com/oauth2-proxy/manifests/blob/master/helm/oauth2-proxy/templates/google-secret.yaml) for the required values                                    | `nil`                                                                                                |
-| `config.google.groups`                                | restrict logins to members of these Google groups                                                                                                                                                                                                                | `[]`                                                                                                 |
-| `config.google.serviceAccountJson`                    | Google service account JSON contents                                                                                                                                                                                                                             | `""`                                                                                                 |
-| `config.google.targetPrincipal`                       | service account to use/impersonate                                                                                                                                                                                                                               | `""`                                                                                                 |
-| `config.google.useApplicationDefaultCredentials`      | use the application-default credentials (i.e. Workload Identity on GKE) instead of providing a service account JSON                                                                                                                                              | `false`                                                                                              |
-| `containerPort`                                       | used to customize port on the deployment                                                                                                                                                                                                                         | `""`                                                                                                 |
-| `customLabels`                                        | Custom labels to add into metadata                                                                                                                                                                                                                               | `{}`                                                                                                 |
-| `deploymentAnnotations`                               | annotations to add to the deployment                                                                                                                                                                                                                             | `{}`                                                                                                 |
-| `enableServiceLinks`                                  | configure deployment enableServiceLinks                                                                                                                                                                                                                          | `true`                                                                                               |
-| `extraArgs`                                           | Extra arguments to give the binary. Either as a map with key:value pairs or as a list type, which allows the same flag to be configured multiple times. (e.g. `["--allowed-role=CLIENT_ID:CLIENT_ROLE_NAME_A", "--allowed-role=CLIENT_ID:CLIENT_ROLE_NAME_B"]`). | `{}` or `[]`                                                                                         |
-| `extraContainers`                                     | List of extra containers to be added to the pod                                                                                                                                                                                                                  | `[]`                                                                                                 |
-| `extraEnv`                                            | key:value list of extra environment variables to give the binary                                                                                                                                                                                                 | `[]`                                                                                                 |
-| `extraInitContainers`                                 | List of extra initContainers to be added to the pod                                                                                                                                                                                                              | `[]`                                                                                                 |
-| `extraObjects`                                        | Extra K8s manifests to deploy                                                                                                                                                                                                                                    | `[]`                                                                                                 |
-| `extraVolumeMounts`                                   | list of extra volumeMounts                                                                                                                                                                                                                                       | `[]`                                                                                                 |
-| `extraVolumes`                                        | list of extra volumes                                                                                                                                                                                                                                            | `[]`                                                                                                 |
-| `gatewayApi.annotations`                              | Additional annotations to add to the HTTPRoute                                                                                                                                                                                                                   | `{}`                                                                                                 |
-| `gatewayApi.enabled`                                  | Enable Gateway API HTTPRoute                                                                                                                                                                                                                                     | `false`                                                                                              |
-| `gatewayApi.gatewayRef.name`                          | Name of the Gateway resource to attach the HTTPRoute to                                                                                                                                                                                                          | `""`                                                                                                 |
-| `gatewayApi.gatewayRef.namespace`                     | Namespace of the Gateway resource                                                                                                                                                                                                                                | `""`                                                                                                 |
-| `gatewayApi.hostnames`                                | Hostnames to match in the HTTPRoute                                                                                                                                                                                                                              | `[]`                                                                                                 |
-| `gatewayApi.labels`                                   | Additional labels to add to the HTTPRoute                                                                                                                                                                                                                        | `{}`                                                                                                 |
-| `gatewayApi.rules`                                    | HTTPRoute rule configuration. If not specified, a default rule with PathPrefix `/` will be created                                                                                                                                                               | `[]`                                                                                                 |
-| `global.imageRegistry`                                | For globally overriding the image registry otherwise defaulting to `image.registry`                                                                                                                                                                              |                                                                                                      |
-| `global.imagePullSecrets`                             | For globally overriding the image pull secrets otherwise defaulting to `imagePullSecrets`                                                                                                                                                                        | `[]`                                                                                                 |
-| `hostAliases`                                         | hostAliases is a list of aliases to be added to /etc/hosts for network name resolution.                                                                                                                                                                          |                                                                                                      |
-| `htpasswdFile.enabled`                                | enable htpasswd-file option                                                                                                                                                                                                                                      | `false`                                                                                              |
-| `htpasswdFile.entries`                                | list of [encrypted user:passwords](https://oauth2-proxy.github.io/oauth2-proxy/configuration/overview#command-line-options)                                                                                                                                      | `{}`                                                                                                 |
-| `htpasswdFile.existingSecret`                         | existing Kubernetes secret to use for OAuth2 htpasswd file                                                                                                                                                                                                       | `""`                                                                                                 |
-| `httpScheme`                                          | `http` or `https`. `name` used for the port on the deployment. `httpGet` port `name` and `scheme` used for `liveness`- and `readinessProbes`. `name` and `targetPort` used for the service.                                                                      | `http`                                                                                               |
-| `image.command`                                       | Define command to be executed by container at startup                                                                                                                                                                                                            | `[]`                                                                                                 |
-| `image.pullPolicy`                                    | Image pull policy                                                                                                                                                                                                                                                | `IfNotPresent`                                                                                       |
-| `image.registry`                                      | Image registry                                                                                                                                                                                                                                                   | `quay.io`                                                                                            |
-| `image.repository`                                    | Image repository                                                                                                                                                                                                                                                 | `oauth2-proxy/oauth2-proxy`                                                                          |
-| `image.tag`                                           | Image tag                                                                                                                                                                                                                                                        | `""` (defaults to appVersion)                                                                        |
-| `imagePullSecrets`                                    | Specify image pull secrets                                                                                                                                                                                                                                       | `nil` (does not add image pull secrets to deployed pods)                                             |
-| `ingress.annotations`                                 | Ingress annotations                                                                                                                                                                                                                                              | `nil`                                                                                                |
-| `ingress.className`                                   | name referencing IngressClass                                                                                                                                                                                                                                    | `nil`                                                                                                |
-| `ingress.enabled`                                     | Enable Ingress                                                                                                                                                                                                                                                   | `false`                                                                                              |
-| `ingress.extraPaths`                                  | Ingress extra paths to prepend to every host configuration. Useful when configuring [custom actions with AWS ALB Ingress Controller](https://kubernetes-sigs.github.io/aws-load-balancer-controller/v2.8/guide/ingress/annotations/).                            | `[]`                                                                                                 |
-| `ingress.hosts`                                       | Ingress accepted hostnames                                                                                                                                                                                                                                       | `nil`                                                                                                |
-| `ingress.labels`                                      | Ingress extra labels                                                                                                                                                                                                                                             | `{}`                                                                                                 |
-| `ingress.pathType`                                    | Ingress [path type](https://kubernetes.io/docs/concepts/services-networking/ingress/#path-types)                                                                                                                                                                 | `ImplementationSpecific`                                                                             |
-| `ingress.path`                                        | Ingress accepted path                                                                                                                                                                                                                                            | `/`                                                                                                  |
-| `ingress.tls`                                         | Ingress TLS configuration                                                                                                                                                                                                                                        | `nil`                                                                                                |
-| `initContainers.waitForRedis.enabled`                 | If `redis.enabled` is true, use an init container to wait for the Redis master pod to be ready. If `serviceAccount.enabled` is true, create additionally a role/binding to get, list, and watch the Redis master pod                                             | `true`                                                                                               |
-| `initContainers.waitForRedis.image.pullPolicy`        | kubectl image pull policy                                                                                                                                                                                                                                        | `IfNotPresent`                                                                                       |
-| `initContainers.waitForRedis.image.repository`        | kubectl image repository                                                                                                                                                                                                                                         | `alpine`                                                                                             |
-| `initContainers.waitForRedis.kubectlVersion`          | kubectl version to use for the init container                                                                                                                                                                                                                    | `printf "%s.%s" .Capabilities.KubeVersion.Major (.Capabilities.KubeVersion.Minor \| replace "+" "")` |
-| `initContainers.waitForRedis.resources`               | pod resource requests & limits                                                                                                                                                                                                                                   | `{}`                                                                                                 |
-| `initContainers.waitForRedis.securityContext.enabled` | enable Kubernetes security context on container                                                                                                                                                                                                                  | `true`                                                                                               |
-| `initContainers.waitForRedis.timeout`                 | number of seconds                                                                                                                                                                                                                                                | 180                                                                                                  |
-| `livenessProbe.enabled`                               | enable Kubernetes livenessProbe. Disable to use oauth2-proxy with Istio mTLS. See [Istio FAQ](https://istio.io/help/faq/security/#k8s-health-checks)                                                                                                             | `true`                                                                                               |
-| `livenessProbe.initialDelaySeconds`                   | number of seconds                                                                                                                                                                                                                                                | 0                                                                                                    |
-| `livenessProbe.timeoutSeconds`                        | number of seconds                                                                                                                                                                                                                                                | 1                                                                                                    |
-| `metrics.enabled`                                     | Enable Prometheus metrics endpoint                                                                                                                                                                                                                               | `true`                                                                                               |
-| `metrics.nodePort`                                    | External port for the metrics when service.type is `NodePort`                                                                                                                                                                                                    | `nil`                                                                                                |
-| `metrics.port`                                        | Serve Prometheus metrics on this port                                                                                                                                                                                                                            | `44180`                                                                                              |
-| `metrics.service.appProtocol`                         | application protocol of the metrics port in the service                                                                                                                                                                                                          | `http`                                                                                               |
-| `metrics.serviceMonitor.annotations`                  | Used to pass annotations that are used by the Prometheus installed in your cluster                                                                                                                                                                               | `{}`                                                                                                 |
-| `metrics.serviceMonitor.bearerTokenFile`              | Path to bearer token file.                                                                                                                                                                                                                                       | `""`                                                                                                 |
-| `metrics.serviceMonitor.enabled`                      | Enable Prometheus Operator ServiceMonitor                                                                                                                                                                                                                        | `false`                                                                                              |
-| `metrics.serviceMonitor.interval`                     | Prometheus scrape interval                                                                                                                                                                                                                                       | `60s`                                                                                                |
-| `metrics.serviceMonitor.labels`                       | Add custom labels to the ServiceMonitor resource                                                                                                                                                                                                                 | `{}`                                                                                                 |
-| `metrics.serviceMonitor.metricRelabelings`            | Metric relabel configs to apply to samples before ingestion.                                                                                                                                                                                                     | `[]`                                                                                                 |
-| `metrics.serviceMonitor.namespace`                    | Define the namespace where to deploy the ServiceMonitor resource                                                                                                                                                                                                 | `""`                                                                                                 |
-| `metrics.serviceMonitor.prometheusInstance`           | Prometheus Instance definition                                                                                                                                                                                                                                   | `default`                                                                                            |
-| `metrics.serviceMonitor.relabelings`                  | Relabel configs to apply to samples before ingestion.                                                                                                                                                                                                            | `[]`                                                                                                 |
-| `metrics.serviceMonitor.scheme`                       | HTTP scheme for scraping. It can be used with `tlsConfig` for example, if using Istio mTLS.                                                                                                                                                                      | `""`                                                                                                 |
-| `metrics.serviceMonitor.scrapeTimeout`                | Prometheus scrape timeout                                                                                                                                                                                                                                        | `30s`                                                                                                |
-| `metrics.serviceMonitor.tlsConfig`                    | TLS configuration when scraping the endpoint. For example, if using Istio mTLS.                                                                                                                                                                                  | `{}`                                                                                                 |
-| `namespaceOverride`                                   | Override the deployment namespace                                                                                                                                                                                                                                | `""`                                                                                                 |
-| `networkPolicy.create`                                | Create a NetworkPolicy resource                                                                                                                                                                                                                                  | `false`                                                                                              |
-| `networkPolicy.egress`                                | List of egress configuration objects                                                                                                                                                                                                                             | `[]`                                                                                                 |
-| `networkPolicy.ingress`                               | List of ingress configuration objects                                                                                                                                                                                                                            | `[]`                                                                                                 |
-| `nodeSelector`                                        | node labels for pod assignment                                                                                                                                                                                                                                   | `{}`                                                                                                 |
-| `podAnnotations`                                      | annotations to add to each pod                                                                                                                                                                                                                                   | `{}`                                                                                                 |
-| `podDisruptionBudget.enabled`                         | Enabled creation of PodDisruptionBudget (only if replicaCount > 1)                                                                                                                                                                                               | true                                                                                                 |
-| `podDisruptionBudget.maxUnavailable`                  | maxUnavailable parameter for PodDisruptionBudget, one of maxUnavailable and minAvailable must be null                                                                                                                                                            | null                                                                                                 |
-| `podDisruptionBudget.minAvailable`                    | minAvailable parameter for PodDisruptionBudget, one of maxUnavailable and minAvailable must be null                                                                                                                                                              | 1                                                                                                    |
-| `podDisruptionBudget.unhealthyPodEvictionPolicy`      | Policy for when unhealthy pods should be considered for eviction. Valid values are "IfHealthyBudget" and "AlwaysAllow". See [Kubernetes docs](https://kubernetes.io/docs/tasks/run-application/configure-pdb/#unhealthy-pod-eviction-policy)                     | `""`                                                                                                 |
-| `podLabels`                                           | additional labels to add to each pod                                                                                                                                                                                                                             | `{}`                                                                                                 |
-| `podSecurityContext`                                  | Kubernetes security context to apply to pod                                                                                                                                                                                                                      | `{}`                                                                                                 |
-| `priorityClassName`                                   | priorityClassName                                                                                                                                                                                                                                                | `nil`                                                                                                |
-| `proxyVarsAsSecrets`                                  | Choose between environment values or secrets for setting up OAUTH2_PROXY variables. When set to false, remember to add the variables OAUTH2_PROXY_CLIENT_ID, OAUTH2_PROXY_CLIENT_SECRET, OAUTH2_PROXY_COOKIE_SECRET in extraEnv                                  | `true`                                                                                               |
-| `readinessProbe.enabled`                              | enable Kubernetes readinessProbe. Disable to use oauth2-proxy with Istio mTLS. See [Istio FAQ](https://istio.io/help/faq/security/#k8s-health-checks)                                                                                                            | `true`                                                                                               |
-| `readinessProbe.initialDelaySeconds`                  | number of seconds                                                                                                                                                                                                                                                | 0                                                                                                    |
-| `readinessProbe.periodSeconds`                        | number of seconds                                                                                                                                                                                                                                                | 10                                                                                                   |
-| `readinessProbe.successThreshold`                     | number of successes                                                                                                                                                                                                                                              | 1                                                                                                    |
-| `readinessProbe.timeoutSeconds`                       | number of seconds                                                                                                                                                                                                                                                | 5                                                                                                    |
-| `redis-ha.enabled`                                    | Enable the Redis subchart deployment                                                                                                                                                                                                                             | `false`                                                                                              |
-| `replicaCount`                                        | desired number of pods                                                                                                                                                                                                                                           | `1`                                                                                                  |
-| `resizePolicy`                                        | Container resize policy for runtime resource updates. See [Kubernetes docs](https://kubernetes.io/docs/tasks/configure-pod-container/resize-container-resources/)                                                                                                | `[]`                                                                                                 |
-| `resources`                                           | pod resource requests & limits                                                                                                                                                                                                                                   | `{}`                                                                                                 |
-| `revisionHistoryLimit`                                | maximum number of revisions maintained                                                                                                                                                                                                                           | 10                                                                                                   |
-| `securityContext.enabled`                             | enable Kubernetes security context on container                                                                                                                                                                                                                  | `true`                                                                                               |
-| `service.appProtocol`                                 | application protocol on the port of the service                                                                                                                                                                                                                  | `http`                                                                                               |
-| `service.clusterIP`                                   | cluster ip address                                                                                                                                                                                                                                               | `nil`                                                                                                |
-| `service.externalTrafficPolicy`                       | denotes if the service desires to route external traffic to node-local or cluster-wide endpoints                                                                                                                                                                 | `Cluster`                                                                                            |
-| `service.internalTrafficPolicy`                       | denotes if the service desires to route internal traffic to node-local or cluster-wide endpoints                                                                                                                                                                 | `Cluster`                                                                                            |
-| `service.ipDualStack.enabled`                         | enable IPv4/IPv6 dual-stack for the service                                                                                                                                                                                                                      | `false`                                                                                              |
-| `service.ipDualStack.ipFamilies`                      | ip families for the service if IPv4/IPv6 dual-stack is enabled                                                                                                                                                                                                   | `["IPv6", "IPv4"]`                                                                                   |
-| `service.ipDualStack.ipFamilyPolicy`                  | ip family policy for the service if IPv4/IPv6 dual-stack is enabled                                                                                                                                                                                              | `"PreferDualStack"`                                                                                  |
-| `service.loadBalancerIP`                              | ip of load balancer                                                                                                                                                                                                                                              | `nil`                                                                                                |
-| `service.loadBalancerSourceRanges`                    | allowed source ranges in load balancer                                                                                                                                                                                                                           | `nil`                                                                                                |
-| `service.nodePort`                                    | external port number for the service when service.type is `NodePort`                                                                                                                                                                                             | `nil`                                                                                                |
-| `service.portNumber`                                  | port number for the service                                                                                                                                                                                                                                      | `80`                                                                                                 |
-| `service.targetPort`                                  | (optional) a numeric port number (e.g., 80) or a port name defined in the pod's container(s) (e.g., http)                                                                                                                                                        | `""`                                                                                                 |
-| `service.trafficDistribution`                         | traffic distribution policy for the service. See [Kubernetes docs](https://kubernetes.io/docs/concepts/services-networking/service/#traffic-distribution)                                                                                                        | `""`                                                                                                 |
-| `service.type`                                        | type of service                                                                                                                                                                                                                                                  | `ClusterIP`                                                                                          |
-| `serviceAccount.annotations`                          | (optional) annotations for the service account                                                                                                                                                                                                                   | `{}`                                                                                                 |
-| `serviceAccount.enabled`                              | create a service account                                                                                                                                                                                                                                         | `true`                                                                                               |
-| `serviceAccount.imagePullSecrets`                     | imagePullSecrets for the service account                                                                                                                                                                                                                         | `[]`                                                                                                 |
-| `serviceAccount.name`                                 | the service account name                                                                                                                                                                                                                                         | ``                                                                                                   |
-| `sessionStorage.redis.clientType`                     | Allows the user to select which type of client will be used for the Redis instance. Possible options are: `sentinel`, `cluster` or `standalone`                                                                                                                  | `standalone`                                                                                         |
-| `sessionStorage.redis.cluster.connectionUrls`         | List of Redis cluster connection URLs (e.g., `["redis://127.0.0.1:8000", "redis://127.0.0.1:8000"]`)                                                                                                                                                             | `[]`                                                                                                 |
-| `sessionStorage.redis.existingSecret`                 | Name of the Kubernetes secret containing the Redis & Redis sentinel password values (see also `sessionStorage.redis.passwordKey`)                                                                                                                                | `""`                                                                                                 |
-| `sessionStorage.redis.passwordKey`                    | Key of the Kubernetes secret data containing the Redis password value                                                                                                                                                                                            | `redis-password`                                                                                     |
-| `sessionStorage.redis.password`                       | Redis password. Applicable for all Redis configurations. Taken from Redis subchart secret if not set. `sessionStorage.redis.existingSecret` takes precedence                                                                                                     | `nil`                                                                                                |
-| `sessionStorage.redis.sentinel.connectionUrls`        | List of Redis sentinel connection URLs (e.g. `["redis://127.0.0.1:8000", "redis://127.0.0.1:8000"]`)                                                                                                                                                             | `[]`                                                                                                 |
-| `sessionStorage.redis.sentinel.existingSecret`        | Name of the Kubernetes secret containing the Redis sentinel password value (see also `sessionStorage.redis.sentinel.passwordKey`). Default: `sessionStorage.redis.existingSecret`                                                                                | `""`                                                                                                 |
-| `sessionStorage.redis.sentinel.masterName`            | Redis sentinel master name                                                                                                                                                                                                                                       | `nil`                                                                                                |
-| `sessionStorage.redis.sentinel.passwordKey`           | Key of the Kubernetes secret data containing the Redis sentinel password value                                                                                                                                                                                   | `redis-sentinel-password`                                                                            |
-| `sessionStorage.redis.sentinel.password`              | Redis sentinel password. Used only for sentinel connection; any Redis node passwords need to use `sessionStorage.redis.password`                                                                                                                                 | `nil`                                                                                                |
-| `sessionStorage.redis.standalone.connectionUrl`       | URL of Redis standalone server for Redis session storage (e.g., `redis://HOST[:PORT]`). Automatically generated if not set.                                                                                                                                      | `""`                                                                                                 |
-| `sessionStorage.type`                                 | Session storage type which can be one of the following: `cookie` or `redis`                                                                                                                                                                                      | `cookie`                                                                                             |
-| `strategy`                                            | configure deployment strategy                                                                                                                                                                                                                                    | `{}`                                                                                                 |
-| `tolerations`                                         | list of node taints to tolerate                                                                                                                                                                                                                                  | `[]`                                                                                                 |
-| `topologySpreadConstraints`                           | List of pod topology spread constraints                                                                                                                                                                                                                          | `[]`                                                                                                 |
-
-Specify each parameter using the `--set key=value[,key=value]` argument to `helm install`. For example,
+## Uninstalling
 
 ```console
-$ helm install my-release oauth2-proxy/oauth2-proxy \
-  --set=image.tag=v0.0.2,resources.limits.cpu=200m
+helm uninstall my-release
 ```
 
-Alternatively, a YAML file that specifies the values for the above parameters can be provided while installing the chart. For example,
-
-```console
-$ helm install my-release oauth2-proxy/oauth2-proxy -f values.yaml
-```
-
-> **Tip**: You can use the default [values.yaml](values.yaml)
-
-## Gateway API HTTPRoute Configuration
-
-This chart supports using [Kubernetes Gateway API](https://gateway-api.sigs.k8s.io/) HTTPRoute resources as an alternative to traditional Ingress resources. To use Gateway API:
-
-1. Ensure the Gateway API CRDs are installed in your cluster
-2. Create a Gateway resource (or use an existing one)
-3. Configure the chart to create an HTTPRoute
-
-### Basic Gateway API Configuration
-
-```yaml
-gatewayApi:
-  enabled: true
-  gatewayRef:
-    name: my-gateway
-    namespace: gateway-system
-  hostnames:
-    - oauth.example.com
-```
-
-### Advanced Gateway API Configuration with Custom Rules
-
-```yaml
-gatewayApi:
-  enabled: true
-  gatewayRef:
-    name: my-gateway
-    namespace: gateway-system
-  hostnames:
-    - oauth.example.com
-  rules:
-    - matches:
-        - path:
-            type: PathPrefix
-            value: /oauth2
-      filters:
-        - type: RequestHeaderModifier
-          requestHeaderModifier:
-            add:
-              - name: X-Auth-Request
-                value: "true"
-  labels:
-    app: oauth2-proxy
-  annotations:
-    example.com/annotation: "value"
-```
-
-If you don't specify custom rules, the chart will create a default rule that matches all paths with `PathPrefix: /` and routes to the oauth2-proxy service.
-
-## TLS Configuration
-
-See: [TLS Configuration](https://oauth2-proxy.github.io/oauth2-proxy/configuration/tls/).
-Use ```values.yaml``` like:
-
-```yaml
-...
-extraArgs:
-  tls-cert-file: /path/to/cert.pem
-  tls-key-file: /path/to/cert.key
-
-extraVolumes:
-  - name: ssl-cert
-    secret:
-      secretName: my-ssl-secret
-
-extraVolumeMounts:
-  - mountPath: /path/to/
-    name: ssl-cert
-...
-```
-
-With a secret called `my-ssl-secret`:
-
-```yaml
-...
-data:
-  cert.pem: AB..==
-  cert.key: CD..==
-```
-
-## Extra environment variable templating
-The extraEnv value supports the tpl function, which evaluates strings as templates inside the deployment template.
-This is useful for passing a template string as a value to the chart's extra environment variables and rendering external configuration environment values.
-
-```yaml
-...
-tplValue: "This is a test value for the tpl function"
-extraEnv:
-  - name: TEST_ENV_VAR_1
-    value: test_value_1
-  - name: TEST_ENV_VAR_2
-    value: '{{ .Values.tplValue }}'
-```
-
-## Custom templates configuration
-You can replace the default template files using a Kubernetes `configMap` volume. The default templates are the two files [sign_in.html](https://github.com/oauth2-proxy/oauth2-proxy/blob/master/pkg/app/pagewriter/sign_in.html) and [error.html](https://github.com/oauth2-proxy/oauth2-proxy/blob/master/pkg/app/pagewriter/error.html).
-
-```yaml
-config:
-  configFile: |
-    ...
-    custom_templates_dir = "/data/custom-templates"
-
-extraVolumes:
-  - name: custom-templates
-    configMap:
-      name: oauth2-proxy-custom-templates
-
-extraVolumeMounts:
-  - name: custom-templates
-    mountPath: "/data/custom-templates"
-    readOnly: true
-
-extraObjects:
-  - apiVersion: v1
-    kind: ConfigMap
-    metadata:
-      name: oauth2-proxy-custom-templates
-    data:
-      sign_in.html: |
-        <!DOCTYPE html>
-        <html>
-        <body>sign_in</body>
-        </html>
-      error.html: |
-        <!DOCTYPE html>
-        <html>
-        <body>
-        <h1>error</h1>
-        <p>{{`{{ .StatusCode }}`}}</p>
-        </body>
-        </html>
-```
-
-## Multi whitelist-domain configuration
-You must use the config.configFile section for a multi-whitelist-domain configuration for one Oauth2-proxy instance.
-
-It will be overwriting the `/etc/oauth2_proxy/oauth2_proxy.cfg` [configuration file](https://oauth2-proxy.github.io/oauth2-proxy/configuration/overview#config-file).
-In this example, Google provider is used, but you can find all other provider configurations here [oauth_provider](https://oauth2-proxy.github.io/oauth2-proxy/configuration/providers/).
-
-```
-config:
-  ...
-  clientID="$YOUR_GOOGLE_CLIENT_ID"
-  clientSecret="$YOUR_GOOGLE_CLIENT_SECRET"
-  cookieSecret="$YOUR_COOKIE_SECRET"
-  configFile: |
-    ...
-    email_domains = [ "*" ]
-    upstreams = [ "file:///dev/null" ]
-    cookie_secure = "false"
-    cookie_domains = [ ".domain.com", ".example.io" ]
-    whitelist_domains = [ ".domain.com", ".example.io"]
-    provider = "google"
-```
-
-## Route requests to sidecar container
-You can route requests to a sidecar container first by setting the `service.targetPort` variable. The possible values for the targetPort field of a Kubernetes Service can be either a port number or the name of a port defined in the pod. By default, the service's `targetPort` value equals to `httpSchema`'s.
+> **Note:** Persistent Volume Claims created by Redis HA are not automatically deleted. Clean them up manually if needed:
+> ```console
+> kubectl delete pvc -l app=redis-ha
+> ```
